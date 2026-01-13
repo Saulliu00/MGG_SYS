@@ -1455,7 +1455,7 @@
                 const nc_usage_1 = parseFloat(document.getElementById('nc_usage_1').value);
 
                 // Call the backend API to run the Python simulation script
-                const response = await fetch('http://localhost:5000/simulation/predict', {
+                const response = await fetch('http://localhost:5001/simulation/predict', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
