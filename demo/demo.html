@@ -1,0 +1,2240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MGG仿真系统</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        /* General Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        /* Login Page */
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .login-card {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .login-card h2 {
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #2c3e50;
+        }
+
+        .login-card .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .login-card .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+
+        .login-card .btn {
+            width: 100%;
+            padding: 1rem;
+        }
+
+        /* Navigation */
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 0.5rem 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand {
+            color: white !important;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        .nav-link {
+            color: rgba(255,255,255,0.9) !important;
+            margin: 0 0.5rem;
+            transition: color 0.3s;
+        }
+
+        .nav-link:hover {
+            color: white !important;
+        }
+
+        /* Main Layout with Sidebar */
+        .app-layout {
+            display: flex;
+            height: calc(100vh - 70px);
+        }
+
+        /* Sidebar Menu */
+        .sidebar {
+            width: 200px;
+            background: white;
+            box-shadow: 2px 0 6px rgba(0,0,0,0.08);
+            overflow-y: auto;
+            padding: 0.5rem 0;
+        }
+
+        .menu-item {
+            padding: 0;
+            margin: 0.15rem 0;
+        }
+
+        .menu-level-1 {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .menu-level-1:hover {
+            background: #f8f9fa;
+            border-left-color: #667eea;
+        }
+
+        .menu-level-1.active {
+            background: #e8eaf6;
+            border-left-color: #667eea;
+            color: #667eea;
+        }
+
+        .menu-level-1 i {
+            margin-right: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .menu-level-2 {
+            display: none;
+            background: #f8f9fa;
+        }
+
+        .menu-level-2.show {
+            display: block;
+        }
+
+        .menu-level-2-item {
+            padding: 0.45rem 1rem 0.45rem 2.5rem;
+            cursor: pointer;
+            color: #5a6c7d;
+            font-size: 0.82rem;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .menu-level-2-item:hover {
+            background: #e9ecef;
+            color: #667eea;
+            border-left-color: #667eea;
+        }
+
+        .menu-level-2-item.active {
+            background: #d1d9e6;
+            color: #667eea;
+            font-weight: 600;
+            border-left-color: #667eea;
+        }
+
+        .menu-arrow {
+            transition: transform 0.3s;
+        }
+
+        .menu-arrow.rotate {
+            transform: rotate(90deg);
+        }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+        }
+
+        /* Simulation Interface */
+        .simulation-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 2fr;
+            gap: 0.75rem;
+            height: calc(100vh - 120px);
+        }
+
+        /* Panel Styles */
+        .panel {
+            background: white;
+            border-radius: 6px;
+            padding: 1rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            background: #2c3e50;
+            color: white;
+            padding: 0.5rem;
+            margin: -1rem -1rem 0.75rem -1rem;
+            border-radius: 6px 6px 0 0;
+            font-weight: bold;
+            font-size: 0.95rem;
+        }
+
+        /* Form Groups */
+        .form-group {
+            margin-bottom: 0.65rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+            color: #2c3e50;
+            font-size: 0.82rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.35rem 0.4rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        textarea.form-control {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        /* Bootstrap Button Overrides */
+        .btn {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.82rem;
+        }
+
+        .btn i {
+            font-size: 0.82rem;
+        }
+
+        /* Results Section */
+        .results-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 0.5rem;
+            border: none;
+            background: #ecf0f1;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.82rem;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab-btn:hover {
+            background: #764ba2;
+            color: white;
+        }
+
+        .tab-btn:disabled {
+            background: #6c757d !important;
+            color: #adb5bd !important;
+            cursor: not-allowed !important;
+            opacity: 0.6;
+        }
+
+        .tab-btn:disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .tab-content {
+            display: none;
+            flex: 1;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            background: white;
+            padding: 0.75rem;
+            border-radius: 6px;
+            height: auto;
+        }
+
+        .chart-header {
+            background: #34495e;
+            color: white;
+            padding: 0.4rem 0.75rem;
+            margin: -0.75rem -0.75rem 0.5rem -0.75rem;
+            border-radius: 6px 6px 0 0;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .chart-info {
+            font-size: 0.75rem;
+            color: #7f8c8d;
+            margin-bottom: 0.4rem;
+        }
+
+        #chartDiv, #comparisonChart {
+            width: 100%;
+            height: 350px;
+        }
+
+        /* Buttons - already defined above, removing duplicate */
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        /* File Input Button */
+        #fileInput {
+            display: none;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .action-buttons .btn {
+            flex: 1;
+        }
+
+        /* Upload Section */
+        .upload-section {
+            border: 2px dashed #667eea;
+            border-radius: 6px;
+            padding: 1rem;
+            text-align: center;
+            margin-top: 0.5rem;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-section:hover {
+            background: #e9ecef;
+            border-color: #764ba2;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9998;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .notification.show {
+            display: block;
+        }
+
+        .notification.success {
+            border-left: 4px solid #27ae60;
+        }
+
+        .notification.info {
+            border-left: 4px solid #667eea;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Hide/Show pages */
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        /* Content sections */
+        .content-section {
+            display: none;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        /* Future Development Page */
+        .future-dev-container {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .future-dev-container i {
+            font-size: 4rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .future-dev-container h3 {
+            color: #2c3e50;
+            margin-bottom: 1rem;
+        }
+
+        .future-dev-container p {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .simulation-container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .app-layout {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <!-- Notification -->
+    <div id="notification" class="notification">
+        <div id="notificationContent"></div>
+    </div>
+
+    <!-- Login Page -->
+    <div id="loginPage" class="page active">
+        <div class="login-container">
+            <div class="login-card">
+                <h2><i class="fas fa-rocket"></i> 陕西庆华汽车安全系统有限公司AI仿真系统</h2>
+                <form id="loginForm" onsubmit="login(event)">
+                    <div class="form-group">
+                        <label>用户名</label>
+                        <input type="text" id="username" class="form-control" required placeholder="请输入用户名">
+                    </div>
+                    <div class="form-group">
+                        <label>密码</label>
+                        <input type="password" id="password" class="form-control" required placeholder="请输入密码">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> 登录
+                    </button>
+                </form>
+                <div style="text-align: center; margin-top: 1.5rem; font-size: 0.85rem; color: #7f8c8d;">
+                    <p>演示账号：admin / admin123</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Page -->
+    <div id="mainPage" class="page">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#" onclick="showNotification('欢迎使用陕西庆华汽车安全系统有限公司AI仿真系统！', 'info')">
+                    <i class="fas fa-rocket"></i> 陕西庆华汽车安全系统有限公司AI仿真系统
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto">
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user"></i> <span id="currentUsername">演示用户</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="logout()">
+                                    <i class="fas fa-sign-out-alt"></i> 退出登录
+                                </a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <!-- App Layout with Sidebar -->
+        <div class="app-layout">
+            <!-- Sidebar Menu -->
+            <div class="sidebar">
+                <!-- MGG Menu -->
+                <div class="menu-item">
+                    <div class="menu-level-1" onclick="toggleMenu('mgg-menu', this)">
+                        <span><i class="fas fa-flask"></i>MGG</span>
+                        <i class="fas fa-chevron-right menu-arrow"></i>
+                    </div>
+                    <div id="mgg-menu" class="menu-level-2">
+                        <div class="menu-level-2-item" onclick="showContent('forward', this)">
+                            <i class="fas fa-arrow-right"></i> 正向
+                        </div>
+                        <div class="menu-level-2-item" onclick="showContent('reverse', this)">
+                            <i class="fas fa-arrow-left"></i> 逆向
+                        </div>
+                        <div class="menu-level-2-item" onclick="showContent('test-results', this)">
+                            <i class="fas fa-clipboard-check"></i> 实验结果
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Access Control Menu -->
+                <div class="menu-item">
+                    <div class="menu-level-1" onclick="toggleMenu('access-menu', this)">
+                        <span><i class="fas fa-user-shield"></i>Access Control</span>
+                        <i class="fas fa-chevron-right menu-arrow"></i>
+                    </div>
+                    <div id="access-menu" class="menu-level-2">
+                        <div class="menu-level-2-item" onclick="showContent('user-management', this)">
+                            <i class="fas fa-users"></i> 用户管理
+                        </div>
+                        <div class="menu-level-2-item" onclick="showContent('role-management', this)">
+                            <i class="fas fa-user-tag"></i> 角色管理
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="main-content">
+                <!-- Forward Simulation Content (正向) -->
+                <div id="forward-content" class="content-section">
+                    <div class="simulation-container">
+                        <!-- Left Panel - Test Parameters -->
+                        <div class="panel parameters-panel">
+                            <div class="panel-title">测试参数</div>
+
+                            <form id="simulationForm">
+                                <div class="form-group">
+                                    <label>点火具型号:</label>
+                                    <select id="igniter_model" class="form-control" onchange="handleDropdownChange(this, '点火具型号')">
+                                        <option value="115">115</option>
+                                        <option value="116">116</option>
+                                        <option value="117">117</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="igniter_model_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>NC类型1:</label>
+                                    <select id="nc_type_1" class="form-control" onchange="handleDropdownChange(this, 'NC类型1')">
+                                        <option value="D">D</option>
+                                        <option value="E">E</option>
+                                        <option value="F">F</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="nc_type_1_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>NC用量1 (毫克):</label>
+                                    <input type="number" id="nc_usage_1" class="form-control" value="50" step="0.1" onchange="showNotification('NC用量1已更新', 'success')">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>NC类型2:</label>
+                                    <select id="nc_type_2" class="form-control" onchange="handleDropdownChange(this, 'NC类型2')">
+                                        <option value="无">无</option>
+                                        <option value="D">D</option>
+                                        <option value="E">E</option>
+                                        <option value="F">F</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="nc_type_2_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>NC用量2 (毫克):</label>
+                                    <input type="number" class="form-control" value="0" step="0.1" onchange="showNotification('NC用量2已更新', 'success')">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>GP类型:</label>
+                                    <select id="gp_type" class="form-control" onchange="handleDropdownChange(this, 'GP类型')">
+                                        <option value="A">A</option>
+                                        <option value="B">B</option>
+                                        <option value="C">C</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="gp_type_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>GP用量 (毫克):</label>
+                                    <input type="number" class="form-control" value="0" step="0.1" onchange="showNotification('GP用量已更新', 'success')">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>管壳高度:</label>
+                                    <select id="shell_model" class="form-control" onchange="handleDropdownChange(this, '管壳高度')">
+                                        <option value="18">18</option>
+                                        <option value="19">19</option>
+                                        <option value="20">20</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="shell_model_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>通电条件:</label>
+                                    <select id="current" class="form-control" onchange="handleDropdownChange(this, '通电条件')">
+                                        <option value="1.2">1.2</option>
+                                        <option value="1.5">1.5</option>
+                                        <option value="2.0">2.0</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="current_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>传感器量程:</label>
+                                    <select id="sensor_model" class="form-control" onchange="handleDropdownChange(this, '传感器量程')">
+                                        <option value="30">30</option>
+                                        <option value="31">31</option>
+                                        <option value="32">32</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="sensor_model_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>容积:</label>
+                                    <select id="volume_model" class="form-control" onchange="handleDropdownChange(this, '容积')">
+                                        <option value="3.5">3.5</option>
+                                        <option value="4.0">4.0</option>
+                                        <option value="4.5">4.5</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="volume_model_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>设备:</label>
+                                    <select id="device" class="form-control" onchange="handleDropdownChange(this, '设备')">
+                                        <option value="A">A</option>
+                                        <option value="B">B</option>
+                                        <option value="C">C</option>
+                                        <option value="custom">自定义...</option>
+                                    </select>
+                                    <input type="text" id="device_custom" class="form-control mt-2" style="display:none;" placeholder="输入自定义值" onchange="checkCustomInputs()">
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Middle Panel - Test Info -->
+                        <div class="panel test-info-panel">
+                            <div class="panel-title">测试标准与人员</div>
+
+                            <div class="form-group">
+                                <label>测试操作员:</label>
+                                <input type="text" class="form-control" placeholder="输入操作员姓名" onchange="showNotification('操作员信息已填写', 'success')">
+                            </div>
+
+                            <div class="form-group">
+                                <label>测试名称:</label>
+                                <input type="text" class="form-control" placeholder="输入测试名称" onchange="showNotification('测试名称已填写', 'success')">
+                            </div>
+
+                            <div class="form-group">
+                                <label>备注:</label>
+                                <textarea class="form-control" placeholder="输入备注信息" onchange="showNotification('备注已添加', 'success')"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel - Results -->
+                        <div class="panel results-panel">
+                            <div class="panel-title">操作与结果</div>
+
+                            <!-- Tab Buttons -->
+                            <div class="tab-buttons">
+                                <button type="button" class="tab-btn active" onclick="switchTabAndRunSimulation(this)">
+                                    <i class="fas fa-calculator"></i> 仿真
+                                </button>
+                                <button type="button" class="tab-btn" onclick="switchTab('actual', this)">
+                                    <i class="fas fa-database"></i> 实际数据存储
+                                </button>
+                                <button type="button" class="tab-btn" onclick="switchTab('comparison', this)">
+                                    <i class="fas fa-chart-line"></i> PT曲线对比
+                                </button>
+                            </div>
+
+                            <!-- Tab Contents -->
+                            <!-- Simulation Tab -->
+                            <div id="simulation" class="tab-content active">
+                                <!-- File Input (hidden) -->
+                                <input type="file" id="fileInput" accept=".xlsx" onchange="handleFileUpload(event)">
+
+                                <div class="action-buttons" style="display: flex; align-items: center; gap: 1rem;">
+                                    <button type="button" class="btn btn-primary" onclick="generateWorkOrder()">
+                                        <i class="fas fa-file-alt"></i> 生成工单
+                                    </button>
+                                    <span id="workOrderNumber" style="font-size: 1rem; color: #2c3e50; font-weight: bold;"></span>
+                                </div>
+
+                                <div class="chart-container mt-4">
+                                    <div class="chart-header">计算结果</div>
+                                    <div class="chart-info">
+                                        <span id="modelInfo">多项式回归模型集合 (60个时间点模型, R²=0.9987)</span><br>
+                                        <span id="predictionValue">拟真值: -</span>
+                                    </div>
+                                    <div id="chartDiv"></div>
+                                </div>
+                            </div>
+
+                            <!-- Actual Data Storage Tab -->
+                            <div id="actual" class="tab-content">
+                                <!-- File Input (hidden) -->
+                                <input type="file" id="actualDataFileInput" accept=".xlsx" onchange="handleActualDataFileSelect(event)">
+
+                                <div class="form-group">
+                                    <label>文件命名 (NC用量值将自动添加):</label>
+                                    <input type="text" id="actualDataFileName" class="form-control" placeholder="例如: 测试_20260106_001">
+                                    <small style="color: #7f8c8d; font-size: 0.85rem;">
+                                        <i class="fas fa-info-circle"></i> 保存格式: 您的文件名_NC50.xlsx (NC用量会自动添加)
+                                    </small>
+                                </div>
+
+                                <div class="upload-section" onclick="document.getElementById('actualDataFileInput').click()">
+                                    <i class="fas fa-cloud-upload-alt fa-2x" style="color: #667eea;"></i>
+                                    <p style="margin-top: 0.5rem; margin-bottom: 0.25rem;">点击选择测试数据文件 (.xlsx)</p>
+                                    <p style="font-size: 0.82rem; color: #7f8c8d; margin-bottom: 0.25rem;">文件应包含时间和压力两列数据</p>
+                                    <p id="selectedFileName" style="font-size: 0.82rem; color: #667eea; font-weight: bold; margin-top: 0.25rem;"></p>
+                                </div>
+
+                                <div class="action-buttons">
+                                    <button type="button" class="btn btn-success" onclick="saveActualDataToStorage()">
+                                        <i class="fas fa-save"></i> 保存到data文件夹
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- PT Curve Comparison Tab -->
+                            <div id="comparison" class="tab-content">
+                                <!-- File Input for loading from data folder -->
+                                <input type="file" id="comparisonFileInput" accept=".xlsx" onchange="loadComparisonFileFromFolder(event)">
+
+                                <div style="background: #f8f9fa; padding: 0.65rem; border-radius: 6px; margin-bottom: 0.65rem;">
+                                    <p style="margin: 0; font-size: 0.82rem; color: #2c3e50;">
+                                        <i class="fas fa-info-circle" style="color: #667eea;"></i>
+                                        当前NC用量: <strong id="comparisonNCValue">50</strong> mg
+                                        <span id="comparisonFileInfo" style="margin-left: 1rem; color: #27ae60;"></span>
+                                    </p>
+                                </div>
+
+                                <div style="background: #fff3cd; padding: 0.65rem; border-radius: 6px; margin-bottom: 0.65rem; border-left: 4px solid #ffc107;">
+                                    <p style="margin: 0; font-size: 0.82rem; color: #856404;">
+                                        <i class="fas fa-exclamation-triangle" style="color: #ffc107;"></i>
+                                        <strong>提示：</strong>请从 demo/data 文件夹中选择匹配当前NC用量的文件进行对比
+                                    </p>
+                                </div>
+
+                                <div class="chart-container">
+                                    <div class="chart-header">PT曲线对比</div>
+                                    <div class="chart-info">
+                                        <span style="color: #667eea;">■</span> 仿真数据 |
+                                        <span style="color: #e74c3c;">■</span> 实际测试数据
+                                    </div>
+                                    <div id="comparisonChart"></div>
+                                </div>
+
+                                <div class="action-buttons" style="margin-top: 0.65rem;">
+                                    <button type="button" class="btn btn-primary" onclick="document.getElementById('comparisonFileInput').click()">
+                                        <i class="fas fa-folder-open"></i> 从data文件夹加载
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" onclick="loadAndCompareData()">
+                                        <i class="fas fa-sync"></i> 从内存加载
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" onclick="showNotification('导出报告功能', 'info')">
+                                        <i class="fas fa-download"></i> 导出报告
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reverse Simulation Content (逆向) -->
+                <div id="reverse-content" class="content-section">
+                    <div class="simulation-container">
+                        <!-- Left Panel - Required and Optional Inputs -->
+                        <div class="panel parameters-panel">
+                            <div class="panel-title">输入参数</div>
+
+                            <form id="reverseSimulationForm">
+                                <h6 style="color: #667eea; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #667eea; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                                    <i class="fas fa-star"></i> 必填参数
+                                </h6>
+
+                                <div class="form-group">
+                                    <label>管壳高度:</label>
+                                    <select id="reverse_shell_height" class="form-control" onchange="showNotification('已选择管壳高度', 'success')">
+                                        <option value="">请选择...</option>
+                                        <option value="18">18</option>
+                                        <option value="19">19</option>
+                                        <option value="20">20</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>通电条件:</label>
+                                    <select id="reverse_current" class="form-control" onchange="showNotification('已选择通电条件', 'success')">
+                                        <option value="">请选择...</option>
+                                        <option value="1.2">1.2</option>
+                                        <option value="1.5">1.5</option>
+                                        <option value="2.0">2.0</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>传感器量程:</label>
+                                    <select id="reverse_sensor_range" class="form-control" onchange="showNotification('已选择传感器量程', 'success')">
+                                        <option value="">请选择...</option>
+                                        <option value="30">30</option>
+                                        <option value="31">31</option>
+                                        <option value="32">32</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>容积:</label>
+                                    <select id="reverse_volume" class="form-control" onchange="showNotification('已选择容积', 'success')">
+                                        <option value="">请选择...</option>
+                                        <option value="3.5">3.5</option>
+                                        <option value="4.0">4.0</option>
+                                        <option value="4.5">4.5</option>
+                                    </select>
+                                </div>
+
+                                <h6 style="color: #95a5a6; font-weight: bold; margin-top: 1rem; margin-bottom: 0.65rem; border-bottom: 2px solid #95a5a6; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                                    <i class="fas fa-circle"></i> 可选参数
+                                </h6>
+
+                                <div class="form-group">
+                                    <label>点火具:</label>
+                                    <select id="reverse_igniter" class="form-control" onchange="showNotification('已选择点火具', 'success')">
+                                        <option value="">无</option>
+                                        <option value="115">115</option>
+                                        <option value="116">116</option>
+                                        <option value="117">117</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>测试设备:</label>
+                                    <select id="reverse_device" class="form-control" onchange="showNotification('已选择测试设备', 'success')">
+                                        <option value="">无</option>
+                                        <option value="A">A</option>
+                                        <option value="B">B</option>
+                                        <option value="C">C</option>
+                                    </select>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Middle Panel - File Upload -->
+                        <div class="panel test-info-panel">
+                            <div class="panel-title">压力数据上传</div>
+
+                            <!-- File Input (hidden) -->
+                            <input type="file" id="reverseFileInput" accept=".xlsx" onchange="handleReverseFileUpload(event)">
+
+                            <div class="upload-section" onclick="document.getElementById('reverseFileInput').click()">
+                                <i class="fas fa-cloud-upload-alt fa-2x" style="color: #667eea;"></i>
+                                <p style="margin-top: 0.5rem; font-weight: bold; margin-bottom: 0.25rem;">点击上传压力曲线文件 (.xlsx)</p>
+                                <p style="font-size: 0.82rem; color: #7f8c8d; margin-bottom: 0.25rem;">文件应包含时间和压力两列数据</p>
+                            </div>
+
+                            <div style="margin-top: 1rem; background: #f8f9fa; padding: 0.75rem; border-radius: 6px; border-left: 4px solid #667eea;">
+                                <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    <i class="fas fa-info-circle"></i> 文件命名规范
+                                </h6>
+                                <p style="font-size: 0.82rem; color: #5a6c7d; margin-bottom: 0.35rem;">
+                                    <strong>格式：</strong><code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.8rem;">测试名称_日期_编号.xlsx</code>
+                                </p>
+                                <p style="font-size: 0.82rem; color: #5a6c7d; margin-bottom: 0.65rem;">
+                                    <strong>示例：</strong><code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.8rem;">压力测试_20260106_001.xlsx</code>
+                                </p>
+
+                                <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; margin-top: 0.75rem; font-size: 0.85rem;">
+                                    <i class="fas fa-table"></i> Excel格式要求
+                                </h6>
+                                <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="background: #667eea; color: white;">
+                                            <th style="padding: 0.35rem; border: 1px solid #ddd;">列名</th>
+                                            <th style="padding: 0.35rem; border: 1px solid #ddd;">单位</th>
+                                            <th style="padding: 0.35rem; border: 1px solid #ddd;">示例</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">时间</td>
+                                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">ms</td>
+                                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">0, 1, 2, ...</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">压力</td>
+                                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">MPa</td>
+                                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">0.5, 12.3, 45.6, ...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel - Results -->
+                        <div class="panel results-panel">
+                            <div class="panel-title">逆向预测结果</div>
+
+                            <div style="text-align: center; margin-bottom: 1rem;">
+                                <button type="button" class="btn btn-primary" style="width: 80%; padding: 0.65rem; font-size: 0.95rem;" onclick="runReverseSimulation()">
+                                    <i class="fas fa-play"></i> 仿真
+                                </button>
+                            </div>
+
+                            <div id="reverseResults" style="display: none;">
+                                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.65rem;">
+                                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #667eea; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                                        <i class="fas fa-flask"></i> NC配方预测
+                                    </h6>
+                                    <div class="form-group">
+                                        <label>NC类型:</label>
+                                        <input type="text" id="predicted_nc_type" class="form-control" readonly style="background: white; font-weight: bold; color: #667eea;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>NC用量 (毫克):</label>
+                                        <input type="text" id="predicted_nc_amount" class="form-control" readonly style="background: white; font-weight: bold; color: #667eea;">
+                                    </div>
+                                </div>
+
+                                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px;">
+                                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #27ae60; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                                        <i class="fas fa-vial"></i> GP配方预测
+                                    </h6>
+                                    <div class="form-group">
+                                        <label>GP类型:</label>
+                                        <input type="text" id="predicted_gp_type" class="form-control" readonly style="background: white; font-weight: bold; color: #27ae60;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>GP用量 (毫克):</label>
+                                        <input type="text" id="predicted_gp_amount" class="form-control" readonly style="background: white; font-weight: bold; color: #27ae60;">
+                                    </div>
+                                </div>
+
+                                <div style="margin-top: 0.75rem; padding: 0.65rem; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #27ae60;">
+                                    <p style="margin: 0; font-size: 0.82rem; color: #2c3e50;">
+                                        <i class="fas fa-check-circle" style="color: #27ae60;"></i>
+                                        <strong>置信度：</strong><span id="confidence_score">95.3%</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div id="reverseResultsPlaceholder" style="text-align: center; padding: 2rem 0.75rem; color: #95a5a6;">
+                                <i class="fas fa-arrow-up" style="font-size: 2rem; margin-bottom: 0.65rem;"></i>
+                                <p style="font-size: 0.85rem; margin-bottom: 0.25rem;">上传压力数据并点击"仿真"按钮</p>
+                                <p style="font-size: 0.82rem;">系统将预测所需的配方参数</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test Results Content (实验结果) -->
+                <div id="test-results-content" class="content-section">
+                    <div class="simulation-container">
+                        <!-- Left Panel - Work Order Info -->
+                        <div class="panel parameters-panel">
+                            <div class="panel-title">测试信息</div>
+
+                            <form id="testResultsForm">
+                                <div class="form-group">
+                                    <label>工单:</label>
+                                    <input type="text" id="work_order" class="form-control" placeholder="例如: WO-20260106-001" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>测试员工号:</label>
+                                    <input type="text" id="tester_id" class="form-control" placeholder="例如: EMP001" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>设备:</label>
+                                    <select id="test_device" class="form-control" required>
+                                        <option value="">请选择设备...</option>
+                                        <option value="A">设备 A</option>
+                                        <option value="B">设备 B</option>
+                                        <option value="C">设备 C</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>测试日期:</label>
+                                    <input type="date" id="test_date" class="form-control" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>备注:</label>
+                                    <textarea id="test_notes" class="form-control" rows="3" placeholder="可选备注信息..."></textarea>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Middle Panel - Batch File Upload -->
+                        <div class="panel test-info-panel">
+                            <div class="panel-title">批量上传测试数据</div>
+
+                            <!-- File Input (hidden, multiple) -->
+                            <input type="file" id="batchTestFileInput" accept=".xlsx" multiple onchange="handleBatchTestFileUpload(event)">
+
+                            <div class="upload-section" onclick="document.getElementById('batchTestFileInput').click()">
+                                <i class="fas fa-cloud-upload-alt fa-2x" style="color: #667eea;"></i>
+                                <p style="margin-top: 0.5rem; font-weight: bold; margin-bottom: 0.25rem;">点击批量上传测试结果文件 (.xlsx)</p>
+                                <p style="font-size: 0.82rem; color: #7f8c8d; margin-bottom: 0.25rem;">支持选择多个文件同时上传</p>
+                                <p id="batchFileCount" style="font-size: 0.82rem; color: #667eea; font-weight: bold; margin-top: 0.25rem;"></p>
+                            </div>
+
+                            <div id="uploadedFilesList" style="margin-top: 0.75rem; max-height: 250px; overflow-y: auto;">
+                                <!-- List of uploaded files will appear here -->
+                            </div>
+
+                            <div style="margin-top: 1rem; background: #f8f9fa; padding: 0.75rem; border-radius: 6px; border-left: 4px solid #667eea;">
+                                <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                    <i class="fas fa-info-circle"></i> 文件要求
+                                </h6>
+                                <ul style="font-size: 0.82rem; color: #5a6c7d; margin: 0; padding-left: 1.25rem;">
+                                    <li style="margin-bottom: 0.25rem;">文件格式: .xlsx</li>
+                                    <li style="margin-bottom: 0.25rem;">必须包含"时间"和"压力"两列</li>
+                                    <li style="margin-bottom: 0.25rem;">支持批量上传多个文件</li>
+                                    <li>文件名建议包含测试编号</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel - Submit & Results -->
+                        <div class="panel results-panel">
+                            <div class="panel-title">提交与结果</div>
+
+                            <div style="background: #fff3cd; padding: 0.65rem; border-radius: 6px; margin-bottom: 0.75rem; border-left: 4px solid #ffc107;">
+                                <p style="margin: 0; font-size: 0.82rem; color: #856404;">
+                                    <i class="fas fa-exclamation-triangle" style="color: #ffc107;"></i>
+                                    <strong>注意：</strong>请确认所有信息填写正确后再提交
+                                </p>
+                            </div>
+
+                            <div style="text-align: center; margin-bottom: 1rem;">
+                                <button type="button" class="btn btn-primary" style="width: 80%; padding: 0.65rem; font-size: 0.95rem;" onclick="submitTestResults()">
+                                    <i class="fas fa-paper-plane"></i> 提交测试结果
+                                </button>
+                            </div>
+
+                            <div id="testResultsSummary" style="display: none;">
+                                <div style="background: #e8f5e9; padding: 0.75rem; border-radius: 6px; border-left: 4px solid #27ae60; margin-bottom: 0.65rem;">
+                                    <h6 style="color: #27ae60; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                                        <i class="fas fa-check-circle"></i> 提交成功
+                                    </h6>
+                                    <p style="margin: 0; font-size: 0.82rem; color: #2c3e50; line-height: 1.6;">
+                                        工单: <strong id="summary_work_order"></strong><br>
+                                        测试员: <strong id="summary_tester"></strong><br>
+                                        设备: <strong id="summary_device"></strong><br>
+                                        文件数量: <strong id="summary_file_count"></strong>
+                                    </p>
+                                </div>
+
+                                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px;">
+                                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #667eea; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                                        <i class="fas fa-list"></i> 已上传文件
+                                    </h6>
+                                    <div id="submittedFilesList" style="max-height: 200px; overflow-y: auto;">
+                                        <!-- List of submitted files -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="testResultsPlaceholder" style="text-align: center; padding: 2rem 0.75rem; color: #95a5a6;">
+                                <i class="fas fa-arrow-left" style="font-size: 2rem; margin-bottom: 0.65rem;"></i>
+                                <p style="font-size: 0.85rem; margin-bottom: 0.25rem;">填写测试信息并上传文件</p>
+                                <p style="font-size: 0.82rem;">然后点击"提交测试结果"按钮</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- User Management Content -->
+                <div id="user-management-content" class="content-section">
+                    <div class="future-dev-container">
+                        <i class="fas fa-users"></i>
+                        <h3>用户管理功能</h3>
+                        <p>此功能正在开发中，敬请期待...</p>
+                    </div>
+                </div>
+
+                <!-- Role Management Content -->
+                <div id="role-management-content" class="content-section">
+                    <div class="future-dev-container">
+                        <i class="fas fa-user-tag"></i>
+                        <h3>角色管理功能</h3>
+                        <p>此功能正在开发中，敬请期待...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Current user
+        let currentUser = null;
+
+        // Simulation data
+        let simulationData = null;
+        let testData = null;
+        let latestModel = null;
+
+        // Login function
+        function login(event) {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // Simple demo authentication
+            if (username && password) {
+                currentUser = username;
+                document.getElementById('currentUsername').textContent = username;
+
+                // Hide login page, show main page
+                document.getElementById('loginPage').classList.remove('active');
+                document.getElementById('mainPage').classList.add('active');
+
+                showNotification('登录成功！欢迎使用陕西庆华汽车安全系统有限公司AI仿真系统', 'success');
+
+                // Auto-select first menu item
+                setTimeout(() => {
+                    const firstMenu = document.querySelector('.menu-level-1');
+                    toggleMenu('mgg-menu', firstMenu);
+                    const firstSubMenu = document.querySelector('.menu-level-2-item');
+                    showContent('forward', firstSubMenu);
+                }, 300);
+            } else {
+                showNotification('请输入用户名和密码', 'info');
+            }
+        }
+
+        // Logout function
+        function logout() {
+            currentUser = null;
+
+            // Hide main page, show login page
+            document.getElementById('mainPage').classList.remove('active');
+            document.getElementById('loginPage').classList.add('active');
+
+            showNotification('已退出登录', 'info');
+        }
+
+        // Toggle menu
+        function toggleMenu(menuId, element) {
+            const menu = document.getElementById(menuId);
+            const arrow = element.querySelector('.menu-arrow');
+
+            // Close all other menus
+            document.querySelectorAll('.menu-level-2').forEach(m => {
+                if (m.id !== menuId) {
+                    m.classList.remove('show');
+                }
+            });
+
+            // Reset all arrows
+            document.querySelectorAll('.menu-arrow').forEach(a => {
+                if (a !== arrow) {
+                    a.classList.remove('rotate');
+                }
+            });
+
+            // Remove active from all level-1 items
+            document.querySelectorAll('.menu-level-1').forEach(item => {
+                if (item !== element) {
+                    item.classList.remove('active');
+                }
+            });
+
+            // Toggle current menu
+            menu.classList.toggle('show');
+            arrow.classList.toggle('rotate');
+            element.classList.toggle('active');
+        }
+
+        // Show content
+        function showContent(contentId, element) {
+            // Hide all content sections
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Remove active from all level-2 items
+            document.querySelectorAll('.menu-level-2-item').forEach(item => {
+                item.classList.remove('active');
+            });
+
+            // Show selected content
+            const contentMap = {
+                'forward': 'forward-content',
+                'reverse': 'reverse-content',
+                'test-results': 'test-results-content',
+                'user-management': 'user-management-content',
+                'role-management': 'role-management-content'
+            };
+
+            const targetContent = document.getElementById(contentMap[contentId]);
+            if (targetContent) {
+                targetContent.classList.add('active');
+                element.classList.add('active');
+
+                // Initialize charts if showing forward content
+                if (contentId === 'forward') {
+                    setTimeout(initializeCharts, 300);
+                }
+            }
+
+            showNotification('切换到：' + element.textContent.trim(), 'info');
+        }
+
+        // Tab switching
+        function switchTab(tabName, button) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            button.classList.add('active');
+
+            showNotification('切换到：' + button.textContent.trim(), 'info');
+        }
+
+        // Switch to simulation tab and run prediction
+        function switchTabAndRunSimulation(button) {
+            // Check if button is disabled
+            if (button.disabled) {
+                showNotification('请使用标准参数值以使用仿真功能', 'info');
+                return;
+            }
+
+            // First switch to simulation tab
+            switchTab('simulation', button);
+
+            // Then run model prediction
+            runModelPrediction();
+        }
+
+        // Handle dropdown change to show/hide custom input
+        function handleDropdownChange(selectElement, fieldName) {
+            const customInputId = selectElement.id + '_custom';
+            const customInput = document.getElementById(customInputId);
+
+            if (selectElement.value === 'custom') {
+                customInput.style.display = 'block';
+                showNotification('请输入自定义' + fieldName, 'info');
+            } else {
+                customInput.style.display = 'none';
+                customInput.value = '';
+                showNotification('已选择' + fieldName, 'success');
+            }
+
+            checkCustomInputs();
+        }
+
+        // Check if any custom inputs are being used and disable/enable simulation button
+        function checkCustomInputs() {
+            const simulationButton = document.querySelector('.tab-btn[onclick*="switchTabAndRunSimulation"]');
+            let hasCustomValues = false;
+
+            // List of all dropdowns with custom option
+            const dropdownIds = [
+                'igniter_model', 'nc_type_1', 'nc_type_2', 'gp_type',
+                'shell_model', 'current', 'sensor_model', 'volume_model', 'device'
+            ];
+
+            // Check if any dropdown is set to custom
+            for (const id of dropdownIds) {
+                const select = document.getElementById(id);
+                if (select && select.value === 'custom') {
+                    hasCustomValues = true;
+                    break;
+                }
+            }
+
+            // Disable or enable the simulation button
+            if (hasCustomValues) {
+                simulationButton.disabled = true;
+                simulationButton.style.cursor = 'not-allowed';
+                showNotification('仿真功能已禁用：检测到自定义参数值', 'info');
+            } else {
+                simulationButton.disabled = false;
+                simulationButton.style.cursor = 'pointer';
+            }
+        }
+
+        // Notification system
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const content = document.getElementById('notificationContent');
+
+            content.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'info-circle') + '"></i> ' + message;
+            notification.className = 'notification show ' + type;
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Load models from models folder (simulated)
+        async function loadLatestModel() {
+            showNotification('正在加载模型...', 'info');
+
+            // Simulate loading 60 models from models folder
+            // In real implementation, this would fetch from the server
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Mock 60 models - each model predicts pressure at ONE specific time point
+            // Time range: 0 to 40ms, 60 models means approximately 0.678ms intervals
+            const numModels = 60;
+            const timeRange = 40; // 0 to 40ms
+
+            latestModel = {
+                name: 'pressure_prediction_models_v1',
+                version: '1.0',
+                type: 'polynomial_regression_ensemble',
+                numModels: numModels,
+                timeRange: timeRange,
+                r_squared: 0.9987,
+                // Generate time points for each model
+                timePoints: Array.from({length: numModels}, (_, i) => (i / (numModels - 1)) * timeRange)
+            };
+
+            showNotification(`模型加载成功: ${latestModel.numModels}个时间点模型`, 'success');
+            return latestModel;
+        }
+
+        // Run model prediction
+        async function runModelPrediction() {
+            showNotification('正在运行仿真预测...', 'info');
+
+            try {
+                // Get NC用量1 value as feature input
+                const nc_usage_1 = parseFloat(document.getElementById('nc_usage_1').value);
+
+                // Call the backend API to run the Python simulation script
+                const response = await fetch('http://localhost:5000/simulation/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        nc_usage_1: nc_usage_1
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Extract the plot data and statistics
+                    const plotData = result.plot_data;
+                    const stats = result.statistics;
+
+                    // Extract time and pressure arrays from Plotly data
+                    const time = plotData.data[0].x;
+                    const pressure = plotData.data[0].y;
+
+                    simulationData = { time, pressure };
+
+                    // Update model info
+                    document.getElementById('modelInfo').textContent =
+                        `模型: ${stats.num_models}个时间点模型 (R²=${stats.r_squared.toFixed(4)})`;
+                    document.getElementById('predictionValue').textContent =
+                        `预测峰值压力: ${stats.peak_pressure.toFixed(2)} MPa (NC用量1: ${stats.nc_usage_1}mg, 数据点: ${stats.num_points})`;
+
+                    // Plot the prediction using actual model data
+                    plotChart();
+
+                    showNotification('仿真预测完成！', 'success');
+                } else {
+                    showNotification('仿真预测失败: ' + result.error, 'info');
+                }
+            } catch (error) {
+                console.error('Error running prediction:', error);
+                showNotification('仿真预测错误: ' + error.message, 'info');
+            }
+        }
+
+        // Simulate individual model prediction at a specific time point
+        // In real implementation, this would be: model.predict(X_input)
+        function predictPressureAtTimePoint(feature, timePoint, modelIndex) {
+            // Mock polynomial regression prediction for this time point
+            // Each model predicts based on the feature value (NC用量1)
+
+            // Normalize feature around reference value (775mg as reference)
+            const featureNorm = feature / 775;
+
+            // Create smooth PT curve using continuous polynomial function
+            // Based on typical pressure-time characteristics for gas generators
+            let pressure;
+
+            // Use a smooth polynomial that models typical PT curve behavior:
+            // - Slow initial rise
+            // - Rapid increase to peak
+            // - Peak around 10-12ms
+            // - Gradual decay
+
+            const t = timePoint;
+
+            // Polynomial coefficients designed for smooth continuous curve
+            // P(t) = at^4 + bt^3 + ct^2 + dt + e
+            if (t <= 20) {
+                // Rising and peak phase (0-20ms)
+                pressure = (
+                    -0.008 * Math.pow(t, 4) +
+                    0.35 * Math.pow(t, 3) -
+                    4.2 * Math.pow(t, 2) +
+                    25 * t +
+                    0.5
+                ) * featureNorm;
+            } else {
+                // Decay phase (20-40ms)
+                const td = t - 20;
+                const peakValue = 58 * featureNorm; // Peak value from phase 1
+                pressure = peakValue * Math.exp(-0.08 * td) - 0.5 * td;
+            }
+
+            // Return non-negative pressure (smooth curve, no noise)
+            return Math.max(0, pressure);
+        }
+
+        // Generate work order number
+        function generateWorkOrder() {
+            // Generate work order number based on current date and time
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            // Format: WO-YYYYMMDD-HHMMSS
+            const workOrderNum = `WO-${year}${month}${day}-${hours}${minutes}${seconds}`;
+
+            // Display the work order number
+            document.getElementById('workOrderNumber').textContent = `工单号: ${workOrderNum}`;
+
+            showNotification(`工单已生成: ${workOrderNum}`, 'success');
+
+            return workOrderNum;
+        }
+
+        // Handle file upload (.xlsx) for forward simulation
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Check if it's an .xlsx file
+            if (!file.name.endsWith('.xlsx')) {
+                showNotification('请上传.xlsx格式的文件', 'info');
+                return;
+            }
+
+            showNotification('正在加载文件: ' + file.name, 'info');
+
+            // For demo, simulate reading .xlsx file
+            // In real implementation, this would use a library like SheetJS to parse Excel
+            setTimeout(() => {
+                // Simulate loading data from Excel file
+                const time = [];
+                const pressure = [];
+
+                // Generate mock data (in real app, this would come from the Excel file)
+                for (let i = 0; i <= 35; i++) {
+                    time.push(i);
+                    if (i < 5) {
+                        pressure.push(i * 2.2);
+                    } else if (i < 10) {
+                        pressure.push(11 + (i - 5) * 9.5);
+                    } else if (i < 15) {
+                        pressure.push(58.5 - (i - 10) * 0.6);
+                    } else {
+                        pressure.push(55.5 - (i - 15) * 1.2);
+                    }
+                }
+
+                testData = { time, pressure };
+                showNotification('文件上传成功！已读取 ' + time.length + ' 个数据点', 'success');
+
+                // Auto plot if simulation data exists
+                if (simulationData) {
+                    plotComparisonChart();
+                }
+            }, 1000);
+        }
+
+        // Global variable to store reverse simulation data
+        let reversePressureData = null;
+
+        // Handle file upload for reverse simulation
+        function handleReverseFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Check if it's an .xlsx file
+            if (!file.name.endsWith('.xlsx')) {
+                showNotification('请上传.xlsx格式的文件', 'info');
+                return;
+            }
+
+            showNotification('正在加载压力数据文件: ' + file.name, 'info');
+
+            // For demo, simulate reading .xlsx file
+            // In real implementation, this would use a library like SheetJS to parse Excel
+            setTimeout(() => {
+                // Simulate loading pressure data from Excel file
+                const time = [];
+                const pressure = [];
+
+                // Generate mock pressure data (in real app, this would come from the Excel file)
+                for (let i = 0; i <= 40; i++) {
+                    time.push(i);
+                    if (i < 5) {
+                        pressure.push(i * 2.1);
+                    } else if (i < 12) {
+                        pressure.push(10.5 + (i - 5) * 9.8);
+                    } else if (i < 20) {
+                        pressure.push(59 - (i - 12) * 0.4);
+                    } else {
+                        pressure.push(56 - (i - 20) * 1.4);
+                    }
+                }
+
+                reversePressureData = { time, pressure };
+                showNotification('压力数据上传成功！已读取 ' + time.length + ' 个数据点', 'success');
+            }, 1000);
+        }
+
+        // Run reverse simulation
+        async function runReverseSimulation() {
+            // Check if pressure data is uploaded
+            if (!reversePressureData) {
+                showNotification('请先上传压力曲线数据文件', 'info');
+                return;
+            }
+
+            // Check if required fields are filled
+            const shellHeight = document.getElementById('reverse_shell_height').value;
+            const current = document.getElementById('reverse_current').value;
+            const sensorRange = document.getElementById('reverse_sensor_range').value;
+            const volume = document.getElementById('reverse_volume').value;
+
+            if (!shellHeight || !current || !sensorRange || !volume) {
+                showNotification('请填写所有必填参数', 'info');
+                return;
+            }
+
+            showNotification('正在运行逆向预测...', 'info');
+
+            // Simulate model prediction
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Calculate peak pressure and other features from uploaded data
+            const peakPressure = Math.max(...reversePressureData.pressure);
+            const avgPressure = reversePressureData.pressure.reduce((a, b) => a + b, 0) / reversePressureData.pressure.length;
+
+            // Mock reverse prediction (in real app, this would call the actual reverse model)
+            // Predict NC type and amount based on pressure characteristics
+            const ncTypes = ['D', 'E', 'F'];
+            const predictedNCType = ncTypes[Math.floor(Math.random() * ncTypes.length)];
+            const predictedNCAmount = (peakPressure / 1.2).toFixed(1); // Simple mock calculation
+
+            // Predict GP type and amount
+            const gpTypes = ['A', 'B', 'C'];
+            const predictedGPType = gpTypes[Math.floor(Math.random() * gpTypes.length)];
+            const predictedGPAmount = (avgPressure * 0.8).toFixed(1); // Simple mock calculation
+
+            // Calculate confidence score
+            const confidenceScore = (92 + Math.random() * 6).toFixed(1); // Mock: 92-98%
+
+            // Update results display
+            document.getElementById('predicted_nc_type').value = predictedNCType;
+            document.getElementById('predicted_nc_amount').value = predictedNCAmount;
+            document.getElementById('predicted_gp_type').value = predictedGPType;
+            document.getElementById('predicted_gp_amount').value = predictedGPAmount;
+            document.getElementById('confidence_score').textContent = confidenceScore + '%';
+
+            // Show results, hide placeholder
+            document.getElementById('reverseResults').style.display = 'block';
+            document.getElementById('reverseResultsPlaceholder').style.display = 'none';
+
+            showNotification('逆向预测完成！', 'success');
+        }
+
+        // Global variable to store selected actual data file
+        let selectedActualDataFile = null;
+
+        // Global object to store saved data files (simulating file system)
+        let savedDataFiles = {};
+
+        // Handle actual data file selection
+        function handleActualDataFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Check if it's an .xlsx file
+            if (!file.name.endsWith('.xlsx')) {
+                showNotification('请上传.xlsx格式的文件', 'info');
+                return;
+            }
+
+            selectedActualDataFile = file;
+            document.getElementById('selectedFileName').textContent = '已选择: ' + file.name;
+            showNotification('文件已选择: ' + file.name, 'success');
+        }
+
+        // Save actual data to storage (demo/data folder)
+        async function saveActualDataToStorage() {
+            if (!selectedActualDataFile) {
+                showNotification('请先选择要上传的文件', 'info');
+                return;
+            }
+
+            const customFileName = document.getElementById('actualDataFileName').value.trim();
+            if (!customFileName) {
+                showNotification('请输入文件命名', 'info');
+                return;
+            }
+
+            // Get current NC用量1 value
+            const nc_usage_1 = parseFloat(document.getElementById('nc_usage_1').value);
+
+            // Create filename with NC value
+            const savedFileName = `${customFileName}_NC${nc_usage_1}.xlsx`;
+
+            showNotification('正在处理文件...', 'info');
+
+            // Read the uploaded file
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                // Get the file data
+                const arrayBuffer = e.target.result;
+
+                // Generate mock test data for this file (in real app, would parse the actual Excel)
+                const time = [];
+                const pressure = [];
+
+                // Add some variation based on NC value
+                const variation = (Math.random() - 0.5) * 0.2;
+
+                for (let i = 0; i <= 40; i++) {
+                    time.push(i);
+                    if (i < 5) {
+                        pressure.push((i * 2.2 + variation * i) * (nc_usage_1 / 50));
+                    } else if (i < 10) {
+                        pressure.push((11 + (i - 5) * 9.5 + variation * 10) * (nc_usage_1 / 50));
+                    } else if (i < 15) {
+                        pressure.push((58.5 - (i - 10) * 0.6 + variation * 5) * (nc_usage_1 / 50));
+                    } else {
+                        pressure.push((55.5 - (i - 15) * 1.2 + variation * 2) * (nc_usage_1 / 50));
+                    }
+                }
+
+                // Store in memory (for comparison feature)
+                savedDataFiles[savedFileName] = {
+                    ncValue: nc_usage_1,
+                    time: time,
+                    pressure: pressure,
+                    savedDate: new Date().toISOString()
+                };
+
+                // Create a blob with the original file data and trigger download
+                const blob = new Blob([arrayBuffer], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                });
+
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = savedFileName;
+                document.body.appendChild(a);
+                a.click();
+
+                // Cleanup
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }, 100);
+
+                showNotification(`文件已下载: ${savedFileName}。请手动保存到 demo/data 文件夹`, 'success');
+
+                // Clear the form
+                document.getElementById('actualDataFileName').value = '';
+                document.getElementById('selectedFileName').textContent = '';
+                selectedActualDataFile = null;
+            };
+
+            reader.onerror = function() {
+                showNotification('文件读取失败', 'info');
+            };
+
+            // Read file as array buffer
+            reader.readAsArrayBuffer(selectedActualDataFile);
+        }
+
+        // Load and compare data based on current NC value
+        async function loadAndCompareData() {
+            // Get current NC用量1 value
+            const nc_usage_1 = parseFloat(document.getElementById('nc_usage_1').value);
+
+            // Update the display
+            document.getElementById('comparisonNCValue').textContent = nc_usage_1;
+
+            showNotification('正在查找匹配的实际数据...', 'info');
+
+            // First, ensure we have simulation data
+            if (!simulationData) {
+                showNotification('请先运行仿真生成预测数据', 'info');
+                return;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Search for files with matching NC value
+            let matchedFile = null;
+            let matchedFileName = null;
+
+            for (const [fileName, fileData] of Object.entries(savedDataFiles)) {
+                if (fileName.includes(`_NC${nc_usage_1}.xlsx`)) {
+                    matchedFile = fileData;
+                    matchedFileName = fileName;
+                    break;
+                }
+            }
+
+            if (matchedFile) {
+                // Found matching file
+                testData = {
+                    time: matchedFile.time,
+                    pressure: matchedFile.pressure
+                };
+
+                document.getElementById('comparisonFileInfo').textContent =
+                    `✓ 已加载: ${matchedFileName}`;
+
+                plotComparisonChart();
+                showNotification('数据对比完成！', 'success');
+            } else {
+                // No matching file found
+                document.getElementById('comparisonFileInfo').textContent =
+                    `✗ 未找到NC${nc_usage_1}的实际数据`;
+
+                // Still plot simulation data only
+                testData = null;
+                plotComparisonChart();
+
+                showNotification(`未找到NC用量为${nc_usage_1}mg的实际数据文件`, 'info');
+            }
+        }
+
+        // Load comparison file from data folder
+        function loadComparisonFileFromFolder(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Check if it's an .xlsx file
+            if (!file.name.endsWith('.xlsx')) {
+                showNotification('请上传.xlsx格式的文件', 'info');
+                return;
+            }
+
+            showNotification('正在加载文件: ' + file.name, 'info');
+
+            // Get current NC用量1 value
+            const nc_usage_1 = parseFloat(document.getElementById('nc_usage_1').value);
+            document.getElementById('comparisonNCValue').textContent = nc_usage_1;
+
+            // Check if filename matches current NC value
+            if (!file.name.includes(`_NC${nc_usage_1}.xlsx`)) {
+                showNotification(`警告: 文件名不包含当前NC用量值(NC${nc_usage_1})，但仍将加载`, 'info');
+            }
+
+            // Read the file
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                // In real implementation, would parse Excel file using SheetJS
+                // For demo, generate mock data based on filename
+                const time = [];
+                const pressure = [];
+
+                // Add some variation
+                const variation = (Math.random() - 0.5) * 0.2;
+
+                for (let i = 0; i <= 40; i++) {
+                    time.push(i);
+                    if (i < 5) {
+                        pressure.push((i * 2.2 + variation * i) * (nc_usage_1 / 50));
+                    } else if (i < 10) {
+                        pressure.push((11 + (i - 5) * 9.5 + variation * 10) * (nc_usage_1 / 50));
+                    } else if (i < 15) {
+                        pressure.push((58.5 - (i - 10) * 0.6 + variation * 5) * (nc_usage_1 / 50));
+                    } else {
+                        pressure.push((55.5 - (i - 15) * 1.2 + variation * 2) * (nc_usage_1 / 50));
+                    }
+                }
+
+                testData = { time, pressure };
+
+                document.getElementById('comparisonFileInfo').textContent =
+                    `✓ 已从文件加载: ${file.name}`;
+
+                // First ensure we have simulation data
+                if (!simulationData) {
+                    showNotification('请先运行仿真生成预测数据', 'info');
+                    return;
+                }
+
+                plotComparisonChart();
+                showNotification('数据加载并对比完成！', 'success');
+            };
+
+            reader.onerror = function() {
+                showNotification('文件读取失败', 'info');
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Refresh comparison (deprecated, now use loadAndCompareData)
+        function refreshComparison() {
+            loadAndCompareData();
+        }
+
+        // Global variable to store batch uploaded files
+        let batchTestFiles = [];
+
+        // Handle batch test file upload
+        function handleBatchTestFileUpload(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+
+            // Filter only .xlsx files
+            const xlsxFiles = files.filter(file => file.name.endsWith('.xlsx'));
+
+            if (xlsxFiles.length === 0) {
+                showNotification('请上传.xlsx格式的文件', 'info');
+                return;
+            }
+
+            if (xlsxFiles.length < files.length) {
+                showNotification(`已过滤 ${files.length - xlsxFiles.length} 个非.xlsx文件`, 'info');
+            }
+
+            // Add to batch files array
+            batchTestFiles = [...batchTestFiles, ...xlsxFiles];
+
+            // Update file count display
+            document.getElementById('batchFileCount').textContent =
+                `已选择 ${batchTestFiles.length} 个文件`;
+
+            // Display list of uploaded files
+            displayUploadedFilesList();
+
+            showNotification(`已添加 ${xlsxFiles.length} 个文件，共 ${batchTestFiles.length} 个文件`, 'success');
+        }
+
+        // Display list of uploaded files
+        function displayUploadedFilesList() {
+            const listContainer = document.getElementById('uploadedFilesList');
+
+            if (batchTestFiles.length === 0) {
+                listContainer.innerHTML = '';
+                return;
+            }
+
+            let html = '<div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px;">';
+            html += '<h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.85rem;">待提交文件列表:</h6>';
+            html += '<ul style="margin: 0; padding-left: 1.25rem; max-height: 180px; overflow-y: auto;">';
+
+            batchTestFiles.forEach((file, index) => {
+                const fileSize = (file.size / 1024).toFixed(2);
+                html += `
+                    <li style="margin-bottom: 0.35rem; font-size: 0.82rem;">
+                        <span style="color: #2c3e50;">${file.name}</span>
+                        <span style="color: #7f8c8d; font-size: 0.8rem;"> (${fileSize} KB)</span>
+                        <button onclick="removeBatchFile(${index})"
+                                style="border: none; background: none; color: #e74c3c; cursor: pointer; margin-left: 0.5rem;"
+                                title="删除">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </li>
+                `;
+            });
+
+            html += '</ul></div>';
+            listContainer.innerHTML = html;
+        }
+
+        // Remove file from batch
+        function removeBatchFile(index) {
+            batchTestFiles.splice(index, 1);
+
+            // Update display
+            document.getElementById('batchFileCount').textContent =
+                batchTestFiles.length > 0 ? `已选择 ${batchTestFiles.length} 个文件` : '';
+
+            displayUploadedFilesList();
+
+            showNotification(`已删除文件，剩余 ${batchTestFiles.length} 个文件`, 'info');
+        }
+
+        // Submit test results
+        async function submitTestResults() {
+            // Get form values
+            const workOrder = document.getElementById('work_order').value.trim();
+            const testerId = document.getElementById('tester_id').value.trim();
+            const testDevice = document.getElementById('test_device').value;
+            const testDate = document.getElementById('test_date').value;
+            const testNotes = document.getElementById('test_notes').value.trim();
+
+            // Validate required fields
+            if (!workOrder) {
+                showNotification('请填写工单号', 'info');
+                return;
+            }
+
+            if (!testerId) {
+                showNotification('请填写测试员工号', 'info');
+                return;
+            }
+
+            if (!testDevice) {
+                showNotification('请选择设备', 'info');
+                return;
+            }
+
+            if (!testDate) {
+                showNotification('请选择测试日期', 'info');
+                return;
+            }
+
+            if (batchTestFiles.length === 0) {
+                showNotification('请至少上传一个测试数据文件', 'info');
+                return;
+            }
+
+            // Show processing notification
+            showNotification('正在提交测试结果...', 'info');
+
+            // Simulate upload process
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // In real implementation, would upload files to server here
+            // For demo, just simulate successful submission
+
+            // Update summary display
+            document.getElementById('summary_work_order').textContent = workOrder;
+            document.getElementById('summary_tester').textContent = testerId;
+            document.getElementById('summary_device').textContent = `设备 ${testDevice}`;
+            document.getElementById('summary_file_count').textContent = `${batchTestFiles.length} 个文件`;
+
+            // Display submitted files list
+            let filesListHtml = '<ul style="margin: 0; padding-left: 1.25rem; font-size: 0.82rem;">';
+            batchTestFiles.forEach(file => {
+                filesListHtml += `<li style="margin-bottom: 0.25rem; color: #2c3e50;">${file.name}</li>`;
+            });
+            filesListHtml += '</ul>';
+            document.getElementById('submittedFilesList').innerHTML = filesListHtml;
+
+            // Show results, hide placeholder
+            document.getElementById('testResultsSummary').style.display = 'block';
+            document.getElementById('testResultsPlaceholder').style.display = 'none';
+
+            showNotification('测试结果提交成功！', 'success');
+
+            // Clear form and files after successful submission
+            setTimeout(() => {
+                clearTestResultsForm();
+            }, 2000);
+        }
+
+        // Clear test results form
+        function clearTestResultsForm() {
+            document.getElementById('work_order').value = '';
+            document.getElementById('tester_id').value = '';
+            document.getElementById('test_device').value = '';
+            document.getElementById('test_date').value = '';
+            document.getElementById('test_notes').value = '';
+
+            batchTestFiles = [];
+            document.getElementById('batchFileCount').textContent = '';
+            document.getElementById('uploadedFilesList').innerHTML = '';
+
+            // Reset file input
+            document.getElementById('batchTestFileInput').value = '';
+        }
+
+        // Plot simulation chart
+        function plotChart() {
+            if (!simulationData) return;
+
+            const trace = {
+                x: simulationData.time,
+                y: simulationData.pressure,
+                mode: 'lines',
+                name: '仿真数据',
+                line: {
+                    color: 'rgb(66, 126, 234)',
+                    width: 3
+                }
+            };
+
+            const layout = {
+                xaxis: {
+                    title: 'Time (ms)',
+                    gridcolor: '#e0e0e0',
+                    showgrid: true
+                },
+                yaxis: {
+                    title: 'Pressure (MPa)',
+                    gridcolor: '#e0e0e0',
+                    showgrid: true
+                },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white',
+                margin: { l: 60, r: 30, t: 30, b: 50 },
+                hovermode: 'x unified'
+            };
+
+            Plotly.newPlot('chartDiv', [trace], layout, {responsive: true});
+        }
+
+        // Plot comparison chart
+        function plotComparisonChart() {
+            const traces = [];
+
+            if (simulationData) {
+                traces.push({
+                    x: simulationData.time,
+                    y: simulationData.pressure,
+                    mode: 'lines',
+                    name: '仿真数据',
+                    line: {
+                        color: 'rgb(66, 126, 234)',
+                        width: 3
+                    }
+                });
+            }
+
+            if (testData) {
+                traces.push({
+                    x: testData.time,
+                    y: testData.pressure,
+                    mode: 'lines',
+                    name: '实际数据',
+                    line: {
+                        color: 'rgb(231, 76, 60)',
+                        width: 3,
+                        dash: 'dot'
+                    }
+                });
+            }
+
+            if (traces.length === 0) {
+                showNotification('请先运行仿真并上传测试数据', 'info');
+                return;
+            }
+
+            const layout = {
+                xaxis: {
+                    title: 'Time (ms)',
+                    gridcolor: '#e0e0e0',
+                    showgrid: true
+                },
+                yaxis: {
+                    title: 'Pressure (MPa)',
+                    gridcolor: '#e0e0e0',
+                    showgrid: true
+                },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white',
+                margin: { l: 60, r: 30, t: 30, b: 50 },
+                legend: {
+                    x: 0.7,
+                    y: 0.1
+                },
+                hovermode: 'x unified'
+            };
+
+            Plotly.newPlot('comparisonChart', traces, layout, {responsive: true});
+        }
+
+        // Initialize charts
+        function initializeCharts() {
+            const layout = {
+                xaxis: {
+                    title: 'Time (ms)',
+                    gridcolor: '#e0e0e0',
+                    range: [0, 35]
+                },
+                yaxis: {
+                    title: 'Pressure (MPa)',
+                    gridcolor: '#e0e0e0',
+                    range: [0, 70]
+                },
+                plot_bgcolor: 'white',
+                paper_bgcolor: 'white',
+                margin: { l: 60, r: 30, t: 30, b: 50 },
+                annotations: [{
+                    text: '点击"仿真"按钮开始预测',
+                    xref: 'paper',
+                    yref: 'paper',
+                    x: 0.5,
+                    y: 0.5,
+                    showarrow: false,
+                    font: { size: 16, color: '#7f8c8d' }
+                }]
+            };
+
+            Plotly.newPlot('chartDiv', [], layout, {responsive: true});
+            Plotly.newPlot('comparisonChart', [], layout, {responsive: true});
+        }
+    </script>
+</body>
+</html>
