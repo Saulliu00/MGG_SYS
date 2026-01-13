@@ -10,38 +10,20 @@ import sys
 import os
 
 def load_test_data(file_path):
-    """Load test data from Excel file"""
+    """Load test data from Excel file - skip first 4 rows, first column is x-axis, second column is y-axis"""
     try:
-        # Read the Excel file
-        df = pd.read_excel(file_path)
+        # Read the Excel file, skipping the first 4 rows
+        df = pd.read_excel(file_path, skiprows=4, header=None)
 
-        # Try to find time and pressure columns (support different naming)
-        time_col = None
-        pressure_col = None
+        # Check if file has at least 2 columns
+        if len(df.columns) < 2:
+            raise ValueError("Excel file must have at least 2 columns")
 
-        # Common column names for time
-        time_names = ['时间', 'Time', 'time', '时间(ms)', 'Time(ms)', 'TIME']
-        for col in df.columns:
-            if any(name in str(col) for name in time_names):
-                time_col = col
-                break
+        # First column is x-axis (time), second column is y-axis (pressure)
+        time_col = df.columns[0]
+        pressure_col = df.columns[1]
 
-        # Common column names for pressure
-        pressure_names = ['压力', 'Pressure', 'pressure', '压力(MPa)', 'Pressure(MPa)', 'PRESSURE']
-        for col in df.columns:
-            if any(name in str(col) for name in pressure_names):
-                pressure_col = col
-                break
-
-        # If not found, use first two columns
-        if time_col is None or pressure_col is None:
-            if len(df.columns) >= 2:
-                time_col = df.columns[0]
-                pressure_col = df.columns[1]
-            else:
-                raise ValueError("Excel file must have at least 2 columns")
-
-        # Extract data
+        # Extract data and drop NaN values
         time = df[time_col].dropna().tolist()
         pressure = df[pressure_col].dropna().tolist()
 
@@ -54,6 +36,8 @@ def load_test_data(file_path):
 
     except Exception as e:
         print(f"Error loading test data: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return None, None
 
 def create_plotly_json(time, pressure, file_name):
