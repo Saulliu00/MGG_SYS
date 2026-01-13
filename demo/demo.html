@@ -616,6 +616,13 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Operation Log Menu -->
+                <div class="menu-item">
+                    <div class="menu-level-1" onclick="showContent('operation-log', this)">
+                        <span><i class="fas fa-history"></i> 操作日志</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Main Content Area -->
@@ -1199,6 +1206,47 @@
                         <p>此功能正在开发中，敬请期待...</p>
                     </div>
                 </div>
+
+                <!-- Operation Log Content (操作日志) -->
+                <div id="operation-log-content" class="content-section">
+                    <div class="panel" style="height: calc(100vh - 140px); padding: 1rem;">
+                        <div class="panel-title">操作日志</div>
+
+                        <div style="display: flex; gap: 0.65rem; margin-bottom: 0.75rem;">
+                            <input type="text" id="logSearchInput" class="form-control" placeholder="搜索日志..." style="flex: 1;" onkeyup="filterLogs()">
+                            <select id="logTypeFilter" class="form-control" style="width: 150px;" onchange="filterLogs()">
+                                <option value="all">全部类型</option>
+                                <option value="login">登录</option>
+                                <option value="simulation">仿真</option>
+                                <option value="upload">上传</option>
+                                <option value="download">下载</option>
+                                <option value="comparison">对比</option>
+                                <option value="work_order">工单</option>
+                                <option value="navigation">导航</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="clearLogs()" style="white-space: nowrap;">
+                                <i class="fas fa-trash"></i> 清空日志
+                            </button>
+                            <button class="btn btn-primary" onclick="exportLogs()" style="white-space: nowrap;">
+                                <i class="fas fa-download"></i> 导出日志
+                            </button>
+                        </div>
+
+                        <div style="background: #f8f9fa; padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 0.82rem; color: #2c3e50;">
+                                <i class="fas fa-info-circle" style="color: #667eea;"></i>
+                                总计 <strong id="logCount">0</strong> 条记录
+                            </span>
+                            <span style="font-size: 0.82rem; color: #7f8c8d;">
+                                自动记录所有用户操作
+                            </span>
+                        </div>
+
+                        <div id="operationLogList" style="overflow-y: auto; height: calc(100% - 150px); background: white; border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem;">
+                            <!-- Logs will be displayed here -->
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1232,6 +1280,7 @@
                 document.getElementById('mainPage').classList.add('active');
 
                 showNotification('登录成功！欢迎使用陕西庆华汽车安全系统有限公司AI仿真系统', 'success');
+                addLog('login', '用户登录', `用户名: ${username}`);
 
                 // Auto-select first menu item
                 setTimeout(() => {
@@ -1306,7 +1355,8 @@
                 'reverse': 'reverse-content',
                 'test-results': 'test-results-content',
                 'user-management': 'user-management-content',
-                'role-management': 'role-management-content'
+                'role-management': 'role-management-content',
+                'operation-log': 'operation-log-content'
             };
 
             const targetContent = document.getElementById(contentMap[contentId]);
@@ -1317,6 +1367,14 @@
                 // Initialize charts if showing forward content
                 if (contentId === 'forward') {
                     setTimeout(initializeCharts, 300);
+                }
+
+                // Log navigation
+                addLog('navigation', '页面导航', `切换到: ${element.textContent.trim()}`);
+
+                // Update log display if navigating to operation log
+                if (contentId === 'operation-log') {
+                    setTimeout(updateLogDisplay, 100);
                 }
             }
 
@@ -1488,6 +1546,7 @@
                     plotChart();
 
                     showNotification('仿真预测完成！', 'success');
+                    addLog('simulation', '运行正向仿真', `NC用量1: ${nc_usage_1}mg, 峰值压力: ${stats.peak_pressure.toFixed(2)} MPa`);
                 } else {
                     showNotification('仿真预测失败: ' + result.error, 'info');
                 }
@@ -1558,6 +1617,7 @@
             document.getElementById('workOrderNumber').textContent = `工单号: ${workOrderNum}`;
 
             showNotification(`工单已生成: ${workOrderNum}`, 'success');
+            addLog('work_order', '生成工单', `工单号: ${workOrderNum}`);
 
             return workOrderNum;
         }
@@ -1702,6 +1762,7 @@
             document.getElementById('reverseResultsPlaceholder').style.display = 'none';
 
             showNotification('逆向预测完成！', 'success');
+            addLog('simulation', '运行逆向仿真', `预测NC: ${predictedNCAmount}mg, 预测GP: ${predictedGPAmount}mg, 置信度: ${confidenceScore}%`);
         }
 
         // Global variable to store selected actual data file
@@ -1924,6 +1985,7 @@
 
                     plotComparisonChart();
                     showNotification('数据加载并对比完成！', 'success');
+                    addLog('comparison', '加载对比数据', `文件: ${file.name}, 数据点: ${result.statistics.num_points}`);
                 } else {
                     showNotification('文件加载失败: ' + result.error, 'info');
                 }
@@ -2079,6 +2141,7 @@
             document.getElementById('testResultsPlaceholder').style.display = 'none';
 
             showNotification('测试结果提交成功！', 'success');
+            addLog('upload', '提交测试结果', `工单: ${workOrder}, 文件数: ${batchTestFiles.length}`);
 
             // Clear form and files after successful submission
             setTimeout(() => {
@@ -2227,6 +2290,199 @@
             Plotly.newPlot('chartDiv', [], layout, {responsive: true});
             Plotly.newPlot('comparisonChart', [], layout, {responsive: true});
         }
+
+        // ========== Operation Log System ==========
+
+        // Store operation logs in localStorage
+        let operationLogs = [];
+
+        // Load logs from localStorage on page load
+        function loadLogs() {
+            const savedLogs = localStorage.getItem('operationLogs');
+            if (savedLogs) {
+                operationLogs = JSON.parse(savedLogs);
+            }
+        }
+
+        // Save logs to localStorage
+        function saveLogs() {
+            localStorage.setItem('operationLogs', JSON.stringify(operationLogs));
+        }
+
+        // Add a new log entry
+        function addLog(type, action, details = '') {
+            const log = {
+                id: Date.now() + Math.random(),
+                timestamp: new Date().toISOString(),
+                user: currentUser || 'Anonymous',
+                type: type,
+                action: action,
+                details: details
+            };
+
+            operationLogs.unshift(log); // Add to beginning
+
+            // Keep only last 1000 logs
+            if (operationLogs.length > 1000) {
+                operationLogs = operationLogs.slice(0, 1000);
+            }
+
+            saveLogs();
+            updateLogDisplay();
+        }
+
+        // Format timestamp for display
+        function formatTimestamp(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+        }
+
+        // Get icon and color for log type
+        function getLogStyle(type) {
+            const styles = {
+                'login': { icon: 'fa-sign-in-alt', color: '#27ae60' },
+                'simulation': { icon: 'fa-play-circle', color: '#667eea' },
+                'upload': { icon: 'fa-cloud-upload-alt', color: '#3498db' },
+                'download': { icon: 'fa-download', color: '#9b59b6' },
+                'comparison': { icon: 'fa-exchange-alt', color: '#e67e22' },
+                'work_order': { icon: 'fa-file-alt', color: '#f39c12' },
+                'navigation': { icon: 'fa-compass', color: '#95a5a6' }
+            };
+            return styles[type] || { icon: 'fa-circle', color: '#7f8c8d' };
+        }
+
+        // Get Chinese name for log type
+        function getLogTypeName(type) {
+            const names = {
+                'login': '登录',
+                'simulation': '仿真',
+                'upload': '上传',
+                'download': '下载',
+                'comparison': '对比',
+                'work_order': '工单',
+                'navigation': '导航'
+            };
+            return names[type] || type;
+        }
+
+        // Update log display
+        function updateLogDisplay() {
+            const logList = document.getElementById('operationLogList');
+            const logCount = document.getElementById('logCount');
+
+            if (!logList) return;
+
+            const searchTerm = document.getElementById('logSearchInput')?.value.toLowerCase() || '';
+            const typeFilter = document.getElementById('logTypeFilter')?.value || 'all';
+
+            // Filter logs
+            let filteredLogs = operationLogs.filter(log => {
+                const matchesSearch = searchTerm === '' ||
+                    log.action.toLowerCase().includes(searchTerm) ||
+                    log.details.toLowerCase().includes(searchTerm) ||
+                    log.user.toLowerCase().includes(searchTerm);
+
+                const matchesType = typeFilter === 'all' || log.type === typeFilter;
+
+                return matchesSearch && matchesType;
+            });
+
+            // Update count
+            if (logCount) {
+                logCount.textContent = filteredLogs.length;
+            }
+
+            // Display logs
+            if (filteredLogs.length === 0) {
+                logList.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: #95a5a6;">
+                        <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                        <p>暂无日志记录</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            filteredLogs.forEach(log => {
+                const style = getLogStyle(log.type);
+                const typeName = getLogTypeName(log.type);
+
+                html += `
+                    <div style="border-left: 4px solid ${style.color}; background: #f8f9fa; padding: 0.65rem; margin-bottom: 0.5rem; border-radius: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.35rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas ${style.icon}" style="color: ${style.color}; font-size: 0.9rem;"></i>
+                                <span style="font-weight: bold; font-size: 0.85rem; color: #2c3e50;">${log.action}</span>
+                                <span style="background: ${style.color}; color: white; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.75rem;">${typeName}</span>
+                            </div>
+                            <span style="font-size: 0.75rem; color: #7f8c8d;">${formatTimestamp(log.timestamp)}</span>
+                        </div>
+                        <div style="font-size: 0.8rem; color: #5a6c7d; margin-left: 1.9rem;">
+                            <i class="fas fa-user" style="margin-right: 0.3rem;"></i>用户: ${log.user}
+                            ${log.details ? `<br><i class="fas fa-info-circle" style="margin-right: 0.3rem;"></i>${log.details}` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            logList.innerHTML = html;
+        }
+
+        // Filter logs based on search and type
+        function filterLogs() {
+            updateLogDisplay();
+        }
+
+        // Clear all logs
+        function clearLogs() {
+            if (confirm('确定要清空所有日志吗？此操作不可撤销。')) {
+                operationLogs = [];
+                saveLogs();
+                updateLogDisplay();
+                showNotification('日志已清空', 'success');
+                addLog('navigation', '清空操作日志', '用户清空了所有操作日志');
+            }
+        }
+
+        // Export logs as JSON file
+        function exportLogs() {
+            if (operationLogs.length === 0) {
+                showNotification('没有可导出的日志', 'info');
+                return;
+            }
+
+            const dataStr = JSON.stringify(operationLogs, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            a.href = url;
+            a.download = `operation_logs_${timestamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+
+            showNotification('日志已导出', 'success');
+            addLog('download', '导出操作日志', `导出了 ${operationLogs.length} 条日志记录`);
+        }
+
+        // Load logs on page load
+        loadLogs();
+        updateLogDisplay();
     </script>
 </body>
 </html>
