@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}历史记录 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <div class="admin-header">
+        <h2><i class="fas fa-history"></i> 仿真历史记录</h2>
+        <p style="color: #7f8c8d; margin-top: 0.5rem;">查看您的所有仿真计算记录</p>
+    </div>
+
+    <div class="admin-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>测试名称</th>
+                    <th>操作员</th>
+                    <th>点火具型号</th>
+                    <th>外壳型号</th>
+                    <th>电流</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if simulations %}
+                    {% for sim in simulations %}
+                    <tr>
+                        <td>{{ sim.id }}</td>
+                        <td>{{ sim.test_name or '未命名' }}</td>
+                        <td>{{ sim.test_operator or '-' }}</td>
+                        <td>{{ sim.ignition_model }}</td>
+                        <td>{{ sim.shell_model }}</td>
+                        <td>{{ sim.current }}</td>
+                        <td>{{ sim.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="viewSimulation({{ sim.id }})">
+                                <i class="fas fa-eye"></i> 查看
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="downloadSimulation({{ sim.id }})">
+                                <i class="fas fa-download"></i> 导出
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 2rem; color: #7f8c8d;">
+                            <i class="fas fa-inbox fa-3x" style="display: block; margin-bottom: 1rem;"></i>
+                            暂无仿真记录
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function viewSimulation(id) {
+    alert('查看仿真 #' + id + ' 的详细信息（功能待实现）');
+}
+
+function downloadSimulation(id) {
+    alert('导出仿真 #' + id + ' 的数据（功能待实现）');
+}
+</script>
+{% endblock %}

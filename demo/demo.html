@@ -1873,7 +1873,7 @@
         }
 
         // Load comparison file from data folder
-        function loadComparisonFileFromFolder(event) {
+        async function loadComparisonFileFromFolder(event) {
             const file = event.target.files[0];
             if (!file) return;
 
@@ -1894,51 +1894,43 @@
                 showNotification(`警告: 文件名不包含当前NC用量值(NC${nc_usage_1})，但仍将加载`, 'info');
             }
 
-            // Read the file
-            const reader = new FileReader();
+            try {
+                // Upload file to backend API
+                const formData = new FormData();
+                formData.append('file', file);
 
-            reader.onload = function(e) {
-                // In real implementation, would parse Excel file using SheetJS
-                // For demo, generate mock data based on filename
-                const time = [];
-                const pressure = [];
+                const response = await fetch('http://localhost:5001/simulation/load_test_data', {
+                    method: 'POST',
+                    body: formData
+                });
 
-                // Add some variation
-                const variation = (Math.random() - 0.5) * 0.2;
+                const result = await response.json();
 
-                for (let i = 0; i <= 40; i++) {
-                    time.push(i);
-                    if (i < 5) {
-                        pressure.push((i * 2.2 + variation * i) * (nc_usage_1 / 50));
-                    } else if (i < 10) {
-                        pressure.push((11 + (i - 5) * 9.5 + variation * 10) * (nc_usage_1 / 50));
-                    } else if (i < 15) {
-                        pressure.push((58.5 - (i - 10) * 0.6 + variation * 5) * (nc_usage_1 / 50));
-                    } else {
-                        pressure.push((55.5 - (i - 15) * 1.2 + variation * 2) * (nc_usage_1 / 50));
+                if (result.success) {
+                    // Store test data
+                    testData = {
+                        time: result.data.time,
+                        pressure: result.data.pressure
+                    };
+
+                    document.getElementById('comparisonFileInfo').textContent =
+                        `✓ 已从文件加载: ${file.name} (${result.statistics.num_points}个数据点)`;
+
+                    // First ensure we have simulation data
+                    if (!simulationData) {
+                        showNotification('请先运行仿真生成预测数据', 'info');
+                        return;
                     }
+
+                    plotComparisonChart();
+                    showNotification('数据加载并对比完成！', 'success');
+                } else {
+                    showNotification('文件加载失败: ' + result.error, 'info');
                 }
-
-                testData = { time, pressure };
-
-                document.getElementById('comparisonFileInfo').textContent =
-                    `✓ 已从文件加载: ${file.name}`;
-
-                // First ensure we have simulation data
-                if (!simulationData) {
-                    showNotification('请先运行仿真生成预测数据', 'info');
-                    return;
-                }
-
-                plotComparisonChart();
-                showNotification('数据加载并对比完成！', 'success');
-            };
-
-            reader.onerror = function() {
-                showNotification('文件读取失败', 'info');
-            };
-
-            reader.readAsArrayBuffer(file);
+            } catch (error) {
+                console.error('Error loading test data:', error);
+                showNotification('文件加载错误: ' + error.message, 'info');
+            }
         }
 
         // Refresh comparison (deprecated, now use loadAndCompareData)

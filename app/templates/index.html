@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card" style="max-width: 600px;">
+        <h2><i class="fas fa-rocket"></i> 欢迎使用 MGG仿真系统</h2>
+
+        <div style="margin: 2rem 0;">
+            <p style="text-align: center; color: #7f8c8d; line-height: 1.8;">
+                本系统提供专业的仿真计算、数据管理和分析功能。<br>
+                请登录以继续使用系统功能。
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 1rem;">
+            <a href="{{ url_for('auth.login') }}" class="btn btn-primary" style="flex: 1;">
+                <i class="fas fa-sign-in-alt"></i> 登录
+            </a>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-secondary" style="flex: 1;">
+                <i class="fas fa-user-plus"></i> 注册
+            </a>
+        </div>
+
+        <div class="mt-4" style="background: #f8f9fa; padding: 1rem; border-radius: 8px;">
+            <h5 style="margin-bottom: 1rem;"><i class="fas fa-info-circle"></i> 系统功能</h5>
+            <ul style="color: #495057; line-height: 2;">
+                <li>仿真计算与参数配置</li>
+                <li>实际测试数据上传与存储</li>
+                <li>PT曲线对比分析</li>
+                <li>历史记录查询</li>
+                <li>用户权限管理（管理员）</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

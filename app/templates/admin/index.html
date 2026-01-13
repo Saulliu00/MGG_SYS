@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}管理面板 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <div class="admin-header">
+        <h2><i class="fas fa-user-shield"></i> 管理面板</h2>
+        <p style="color: #7f8c8d; margin-top: 0.5rem;">用户管理和系统配置</p>
+    </div>
+
+    <div class="admin-table">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h4><i class="fas fa-users"></i> 用户列表</h4>
+            <button class="btn btn-primary" onclick="showAddUserModal()">
+                <i class="fas fa-user-plus"></i> 添加用户
+            </button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>用户名</th>
+                    <th>邮箱</th>
+                    <th>角色</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        {% if user.is_admin %}
+                        <span class="badge badge-primary">管理员</span>
+                        {% else %}
+                        <span class="badge badge-secondary">普通用户</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.is_active %}
+                        <span class="badge badge-success">启用</span>
+                        {% else %}
+                        <span class="badge badge-danger">禁用</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" onclick="toggleUser({{ user.id }})">
+                            <i class="fas fa-toggle-on"></i> 切换状态
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="showResetPasswordModal({{ user.id }}, '{{ user.username }}')">
+                            <i class="fas fa-key"></i> 重置密码
+                        </button>
+                        {% if user.id != current_user.id %}
+                        <button class="btn btn-sm btn-danger" onclick="deleteUser({{ user.id }}, '{{ user.username }}')">
+                            <i class="fas fa-trash"></i> 删除
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div id="addUserModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-user-plus"></i> 添加新用户</h3>
+        </div>
+        <div class="modal-body">
+            <form id="addUserForm">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" name="username" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" name="email" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" name="password" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="is_admin"> 设为管理员
+                    </label>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideAddUserModal()">取消</button>
+            <button class="btn btn-primary" onclick="addUser()">添加</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div id="resetPasswordModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-key"></i> 重置密码</h3>
+        </div>
+        <div class="modal-body">
+            <p>为用户 <strong id="resetUsername"></strong> 设置新密码</p>
+            <form id="resetPasswordForm">
+                <input type="hidden" id="resetUserId" name="user_id">
+                <div class="form-group">
+                    <label>新密码</label>
+                    <input type="password" name="new_password" class="form-control" required>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideResetPasswordModal()">取消</button>
+            <button class="btn btn-primary" onclick="resetPassword()">重置</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

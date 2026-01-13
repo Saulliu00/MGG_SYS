@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}仿真计算 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <div class="simulation-container">
+        <!-- Left Panel - Test Parameters (测试参数) -->
+        <div class="panel parameters-panel">
+            <div class="panel-title">测试参数</div>
+
+            <form id="simulationForm">
+                <div class="form-group">
+                    <label>点火具型号:</label>
+                    <select name="ignition_model" class="form-control">
+                        <option value="115">115</option>
+                        <option value="116">116</option>
+                        <option value="117">117</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>NC类型1:</label>
+                    <select name="nc_type_1" class="form-control">
+                        <option value="D">D</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>NC用量1 (毫克):</label>
+                    <input type="number" name="nc_usage_1" class="form-control" value="0" step="0.1">
+                </div>
+
+                <div class="form-group">
+                    <label>NC类型2:</label>
+                    <select name="nc_type_2" class="form-control">
+                        <option value="无">无</option>
+                        <option value="D">D</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>NC用量2 (毫克):</label>
+                    <input type="number" name="nc_usage_2" class="form-control" value="0" step="0.1">
+                </div>
+
+                <div class="form-group">
+                    <label>GP类型:</label>
+                    <select name="gp_type" class="form-control">
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>GP用量 (毫克):</label>
+                    <input type="number" name="gp_usage" class="form-control" value="0" step="0.1">
+                </div>
+
+                <div class="form-group">
+                    <label>外壳型号:</label>
+                    <select name="shell_model" class="form-control">
+                        <option value="18">18</option>
+                        <option value="19">19</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>电流:</label>
+                    <select name="current" class="form-control">
+                        <option value="1.2">1.2</option>
+                        <option value="1.5">1.5</option>
+                        <option value="2.0">2.0</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>传感器型号:</label>
+                    <select name="sensor_model" class="form-control">
+                        <option value="30">30</option>
+                        <option value="31">31</option>
+                        <option value="32">32</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>体积型号:</label>
+                    <select name="body_model" class="form-control">
+                        <option value="3.5">3.5</option>
+                        <option value="4.0">4.0</option>
+                        <option value="4.5">4.5</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>设备:</label>
+                    <select name="equipment" class="form-control">
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+
+        <!-- Middle Panel - Test Standards and Personnel (测试标准与人员) -->
+        <div class="panel test-info-panel">
+            <div class="panel-title">测试标准与人员</div>
+
+            <div class="form-group">
+                <label>测试操作员:</label>
+                <input type="text" name="test_operator" form="simulationForm" class="form-control" placeholder="输入操作员姓名">
+            </div>
+
+            <div class="form-group">
+                <label>测试名称:</label>
+                <input type="text" name="test_name" form="simulationForm" class="form-control" placeholder="输入测试名称">
+            </div>
+
+            <div class="form-group">
+                <label>备注:</label>
+                <textarea name="notes" form="simulationForm" class="form-control" placeholder="输入备注信息"></textarea>
+            </div>
+        </div>
+
+        <!-- Right Panel - Results (操作与结果) -->
+        <div class="panel results-panel">
+            <div class="panel-title">操作与结果</div>
+
+            <!-- Tab Buttons -->
+            <div class="tab-buttons">
+                <button type="button" class="tab-btn active" onclick="switchTab('simulation')">
+                    <i class="fas fa-calculator"></i> 仿真
+                </button>
+                <button type="button" class="tab-btn" onclick="switchTab('actual')">
+                    <i class="fas fa-database"></i> 实际数据存储
+                </button>
+                <button type="button" class="tab-btn" onclick="switchTab('comparison')">
+                    <i class="fas fa-chart-line"></i> PT曲线对比
+                </button>
+            </div>
+
+            <!-- Tab Contents -->
+            <!-- Simulation Tab -->
+            <div id="simulation" class="tab-content active">
+                <div class="action-buttons">
+                    <button type="button" class="btn btn-primary" onclick="runSimulation()">
+                        <i class="fas fa-play"></i> 计算
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="alert('另存为功能待实现')">
+                        <i class="fas fa-save"></i> 另存为
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="addModelOption()">
+                        <i class="fas fa-plus"></i> 加载模型
+                    </button>
+                </div>
+
+                <div class="chart-container mt-4">
+                    <div class="chart-header">计算结果</div>
+                    <div class="chart-info">
+                        多项式拟合 (Degree=3, 中标R²=1.0000)<br>
+                        拟真值: 775.0
+                    </div>
+                    <div id="chartDiv"></div>
+                </div>
+            </div>
+
+            <!-- Actual Data Storage Tab -->
+            <div id="actual" class="tab-content">
+                <div class="upload-section">
+                    <input type="file" id="testFileInput" accept=".xlsx,.xls" style="display: none;">
+                    <label class="upload-label" onclick="triggerFileInput()">
+                        <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                        <p>点击上传测试数据文件 (.xlsx)</p>
+                        <p style="font-size: 0.9rem; color: #7f8c8d;">文件应包含时间和压力两列数据</p>
+                    </label>
+                </div>
+
+                <div class="action-buttons">
+                    <button type="button" class="btn btn-success" onclick="uploadTestResult()">
+                        <i class="fas fa-upload"></i> 上传并存储
+                    </button>
+                </div>
+            </div>
+
+            <!-- PT Curve Comparison Tab -->
+            <div id="comparison" class="tab-content">
+                <div class="chart-container">
+                    <div class="chart-header">PT曲线对比</div>
+                    <div class="chart-info">
+                        蓝线: 仿真数据 | 红线: 实际测试数据
+                    </div>
+                    <div id="comparisonChart"></div>
+                </div>
+
+                <div class="action-buttons mt-3">
+                    <button type="button" class="btn btn-primary" onclick="plotChart()">
+                        <i class="fas fa-sync"></i> 刷新对比
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="alert('导出功能待实现')">
+                        <i class="fas fa-download"></i> 导出报告
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/simulation.js') }}"></script>
+{% endblock %}

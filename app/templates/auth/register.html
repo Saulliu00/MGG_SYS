@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}注册 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2><i class="fas fa-user-plus"></i> 用户注册</h2>
+
+        <form method="POST" action="{{ url_for('auth.register') }}">
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" name="username" class="form-control" required placeholder="请输入用户名">
+            </div>
+
+            <div class="form-group">
+                <label>邮箱</label>
+                <input type="email" name="email" class="form-control" required placeholder="请输入邮箱">
+            </div>
+
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" name="password" class="form-control" required placeholder="请输入密码">
+            </div>
+
+            <div class="form-group">
+                <label>确认密码</label>
+                <input type="password" name="confirm_password" class="form-control" required placeholder="请再次输入密码">
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-user-plus"></i> 注册
+            </button>
+        </form>
+
+        <div class="auth-link">
+            已有账号？ <a href="{{ url_for('auth.login') }}">立即登录</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
