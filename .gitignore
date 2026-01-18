@@ -63,3 +63,6 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints
+
+# Demo temporary files (demo/ folder is isolated and independent)
+demo/temp/

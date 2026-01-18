@@ -2,6 +2,19 @@
 
 基于Python Flask的Web仿真系统，用于点火具测试参数配置、仿真计算、实际数据对比分析。
 
+## ⚠️ IMPORTANT: Demo Folder Isolation
+
+**The `demo/` folder is completely isolated and independent from the main project.**
+
+- Demo is for quick demonstrations only
+- Demo does NOT use main project code (app/, models/, etc.)
+- Main project changes do NOT affect demo functionality
+- Demo is self-contained with its own HTML, scripts, and data
+
+See [demo/README_ISOLATION.md](demo/README_ISOLATION.md) for complete isolation policy.
+
+---
+
 ## 系统架构
 
 ```
