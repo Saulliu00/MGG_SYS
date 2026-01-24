@@ -66,3 +66,12 @@ htmlcov/
 
 # Demo temporary files (demo/ folder is isolated and independent)
 demo/temp/
+
+# Temporary documentation files
+*_DRAFT.md
+*_TODO.md
+*_TEMP.md
+*_TEST.md
+CLEANUP_PLAN.md
+BUG_FIX_*.md
+RESTART_SERVER.md

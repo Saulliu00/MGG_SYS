@@ -196,6 +196,64 @@ def predict():
             'error': f'Error running simulation: {str(e)}'
         }), 500
 
+@bp.route('/save_to_data_folder', methods=['POST'])
+def save_to_data_folder():
+    """Save uploaded .xlsx file to demo/data folder with NC value naming (no authentication required)"""
+    try:
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'error': '没有上传文件'
+            }), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'error': '文件名为空'
+            }), 400
+
+        if not file.filename.endswith('.xlsx'):
+            return jsonify({
+                'success': False,
+                'error': '仅支持 .xlsx 格式文件'
+            }), 400
+
+        # Get NC value and custom filename from request
+        nc_value = request.form.get('nc_value')
+        custom_name = request.form.get('custom_name', 'value')
+
+        if not nc_value:
+            return jsonify({
+                'success': False,
+                'error': 'NC用量1值未提供'
+            }), 400
+
+        # Create filename: {nc_value}_{custom_name}.xlsx
+        new_filename = f"{nc_value}_{custom_name}.xlsx"
+
+        # Save to demo/data folder
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        data_dir = os.path.join(project_root, 'demo', 'data')
+        os.makedirs(data_dir, exist_ok=True)
+
+        file_path = os.path.join(data_dir, new_filename)
+        file.save(file_path)
+
+        return jsonify({
+            'success': True,
+            'filename': new_filename,
+            'message': f'文件已保存到 demo/data/{new_filename}'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'保存文件失败: {str(e)}'
+        }), 500
+
+
 @bp.route('/load_test_data', methods=['POST'])
 def load_test_data():
     """Load test data from uploaded .xlsx file for comparison (no authentication required)"""

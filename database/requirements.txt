@@ -1,0 +1,20 @@
+# Database Layer Requirements
+# PostgreSQL and SQLAlchemy
+psycopg2-binary>=2.9.9
+SQLAlchemy>=2.0.23
+
+# Parquet Archive Support
+pandas>=2.1.4
+pyarrow>=14.0.1
+
+# Database Migrations (optional)
+alembic>=1.13.0
+
+# Password Hashing
+werkzeug>=3.0.1
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Utilities
+numpy>=1.26.2

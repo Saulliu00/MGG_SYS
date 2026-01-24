@@ -818,10 +818,10 @@
                                 <input type="file" id="actualDataFileInput" accept=".xlsx" onchange="handleActualDataFileSelect(event)">
 
                                 <div class="form-group">
-                                    <label>文件命名 (NC用量值将自动添加):</label>
-                                    <input type="text" id="actualDataFileName" class="form-control" placeholder="例如: 测试_20260106_001">
+                                    <label>文件命名后缀 (可选):</label>
+                                    <input type="text" id="actualDataFileName" class="form-control" placeholder="例如: test_data 或留空使用默认">
                                     <small style="color: #7f8c8d; font-size: 0.85rem;">
-                                        <i class="fas fa-info-circle"></i> 保存格式: 您的文件名_NC50.xlsx (NC用量会自动添加)
+                                        <i class="fas fa-info-circle"></i> 保存格式: NC用量1值_您的命名.xlsx (例如: 50_value.xlsx 或 59_test_data.xlsx)
                                     </small>
                                 </div>
 
@@ -1783,87 +1783,90 @@
             }
 
             const customFileName = document.getElementById('actualDataFileName').value.trim();
-            if (!customFileName) {
-                showNotification('请输入文件命名', 'info');
-                return;
-            }
 
             // Get current NC用量1 value
             const nc_usage_1 = parseFloat(document.getElementById('nc_usage_1').value);
 
-            // Create filename with NC value
-            const savedFileName = `${customFileName}_NC${nc_usage_1}.xlsx`;
+            // Create filename based on NC value: format is "NC用量1值_customFileName.xlsx"
+            // If no custom filename provided, use default "value"
+            const fileNamePart = customFileName || 'value';
+            const savedFileName = `${nc_usage_1}_${fileNamePart}.xlsx`;
 
-            showNotification('正在处理文件...', 'info');
+            showNotification('正在上传文件到服务器...', 'info');
 
-            // Read the uploaded file
-            const reader = new FileReader();
+            // Upload file to backend server
+            const formData = new FormData();
+            formData.append('file', selectedActualDataFile);
+            formData.append('nc_value', nc_usage_1);
+            formData.append('custom_name', fileNamePart);
 
-            reader.onload = function(e) {
-                // Get the file data
-                const arrayBuffer = e.target.result;
+            try {
+                const response = await fetch('http://localhost:5001/simulation/save_to_data_folder', {
+                    method: 'POST',
+                    body: formData
+                });
 
-                // Generate mock test data for this file (in real app, would parse the actual Excel)
-                const time = [];
-                const pressure = [];
-
-                // Add some variation based on NC value
-                const variation = (Math.random() - 0.5) * 0.2;
-
-                for (let i = 0; i <= 40; i++) {
-                    time.push(i);
-                    if (i < 5) {
-                        pressure.push((i * 2.2 + variation * i) * (nc_usage_1 / 50));
-                    } else if (i < 10) {
-                        pressure.push((11 + (i - 5) * 9.5 + variation * 10) * (nc_usage_1 / 50));
-                    } else if (i < 15) {
-                        pressure.push((58.5 - (i - 10) * 0.6 + variation * 5) * (nc_usage_1 / 50));
+                // Check if response is OK
+                if (!response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `服务器错误: ${response.status}`);
                     } else {
-                        pressure.push((55.5 - (i - 15) * 1.2 + variation * 2) * (nc_usage_1 / 50));
+                        throw new Error(`服务器错误: ${response.status} - 请确保Flask服务器正在运行 (python run.py)`);
                     }
                 }
 
-                // Store in memory (for comparison feature)
-                savedDataFiles[savedFileName] = {
-                    ncValue: nc_usage_1,
-                    time: time,
-                    pressure: pressure,
-                    savedDate: new Date().toISOString()
-                };
+                const result = await response.json();
 
-                // Create a blob with the original file data and trigger download
-                const blob = new Blob([arrayBuffer], {
-                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                });
+                if (result.success) {
+                    // Generate mock test data for in-memory storage (for comparison feature)
+                    const time = [];
+                    const pressure = [];
+                    const variation = (Math.random() - 0.5) * 0.2;
 
-                // Create download link
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = savedFileName;
-                document.body.appendChild(a);
-                a.click();
+                    for (let i = 0; i <= 40; i++) {
+                        time.push(i);
+                        if (i < 5) {
+                            pressure.push((i * 2.2 + variation * i) * (nc_usage_1 / 50));
+                        } else if (i < 10) {
+                            pressure.push((11 + (i - 5) * 9.5 + variation * 10) * (nc_usage_1 / 50));
+                        } else if (i < 15) {
+                            pressure.push((58.5 - (i - 10) * 0.6 + variation * 5) * (nc_usage_1 / 50));
+                        } else {
+                            pressure.push((55.5 - (i - 15) * 1.2 + variation * 2) * (nc_usage_1 / 50));
+                        }
+                    }
 
-                // Cleanup
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                }, 100);
+                    // Store in memory (for comparison feature)
+                    savedDataFiles[savedFileName] = {
+                        ncValue: nc_usage_1,
+                        time: time,
+                        pressure: pressure,
+                        savedDate: new Date().toISOString()
+                    };
 
-                showNotification(`文件已下载: ${savedFileName}。请手动保存到 demo/data 文件夹`, 'success');
+                    showNotification(`✅ ${result.message}`, 'success');
 
-                // Clear the form
-                document.getElementById('actualDataFileName').value = '';
-                document.getElementById('selectedFileName').textContent = '';
-                selectedActualDataFile = null;
-            };
+                    // Clear the form
+                    document.getElementById('actualDataFileName').value = '';
+                    document.getElementById('selectedFileName').textContent = '';
+                    selectedActualDataFile = null;
 
-            reader.onerror = function() {
-                showNotification('文件读取失败', 'info');
-            };
+                    addLog('upload', '保存实际数据到demo/data', `文件: ${savedFileName}`);
+                } else {
+                    showNotification(`❌ 上传失败: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
 
-            // Read file as array buffer
-            reader.readAsArrayBuffer(selectedActualDataFile);
+                // Check if it's a network error
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    showNotification('❌ 无法连接到服务器。请确保Flask服务器正在运行: python run.py', 'error');
+                } else {
+                    showNotification(`❌ 上传失败: ${error.message}`, 'error');
+                }
+            }
         }
 
         // Load and compare data based on current NC value
