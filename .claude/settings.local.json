@@ -27,7 +27,16 @@
       "Bash(createdb:*)",
       "Bash(createuser:*)",
       "Bash(gh auth:*)",
-      "Bash(gh repo create:*)"
+      "Bash(gh repo create:*)",
+      "Bash(du:*)",
+      "Bash(python3 -m pip install:*)",
+      "Bash(./venv/bin/pip install:*)",
+      "Bash(./venv/bin/python:*)",
+      "Bash(wc:*)",
+      "Bash(git config:*)",
+      "Bash(git push:*)",
+      "Bash(git restore:*)",
+      "Bash(grep:*)"
     ]
   }
 }
