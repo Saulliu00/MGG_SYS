@@ -5,7 +5,12 @@
 {% block content %}
 <div class="auth-container">
     <div class="auth-card">
-        <h2><i class="fas fa-rocket"></i> MGG仿真系统</h2>
+        <div class="text-center mb-4">
+            <img src="{{ url_for('static', filename='assets/logos/mgg_logo.png') }}"
+                 alt="MGG Logo"
+                 style="height: 100px; width: auto;">
+        </div>
+        <h2 class="text-center">MGG仿真系统</h2>
 
         <form method="POST" action="{{ url_for('auth.login') }}">
             <div class="form-group">

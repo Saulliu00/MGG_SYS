@@ -4,6 +4,15 @@ from flask_login import LoginManager
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 import os
+from app.config.network_config import (
+    CORS_CONFIG,
+    SESSION_CONFIG,
+    REQUEST_LIMITS,
+    TIMEOUTS,
+    NETWORK_LOGGING
+)
+from app.utils import LogoGenerator
+from app.middleware import init_timeout_middleware
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -24,13 +33,34 @@ def create_app():
         'sqlite:///' + os.path.join(app.instance_path, 'simulation_system.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+    # Network configuration from network_config.py
+    app.config['MAX_CONTENT_LENGTH'] = REQUEST_LIMITS['max_content_length']
+    app.config['MAX_FORM_MEMORY_SIZE'] = REQUEST_LIMITS['max_form_memory_size']
+
+    # Session configuration for multi-user access
+    app.config['SESSION_COOKIE_SECURE'] = SESSION_CONFIG['session_cookie_secure']
+    app.config['SESSION_COOKIE_HTTPONLY'] = SESSION_CONFIG['session_cookie_httponly']
+    app.config['SESSION_COOKIE_SAMESITE'] = SESSION_CONFIG['session_cookie_samesite']
+    app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_CONFIG['permanent_session_lifetime']
+
+    # Request timeouts and network logging
+    app.config['TIMEOUTS'] = TIMEOUTS
+    app.config['NETWORK_LOGGING'] = NETWORK_LOGGING
 
     # Initialize extensions
     db.init_app(app)
     login_manager.init_app(app)
     bcrypt.init_app(app)
-    CORS(app)  # Enable CORS for all routes
+
+    # Configure CORS for local network access
+    CORS(app,
+         origins=CORS_CONFIG['origins'],
+         methods=CORS_CONFIG['methods'],
+         allow_headers=CORS_CONFIG['allow_headers'],
+         expose_headers=CORS_CONFIG['expose_headers'],
+         supports_credentials=CORS_CONFIG['supports_credentials'],
+         max_age=CORS_CONFIG['max_age'])
 
     # Login settings
     login_manager.login_view = 'auth.login'
@@ -41,6 +71,17 @@ def create_app():
     app.simulation_service = SimulationService(db)
     app.file_service = FileService(db)
     app.comparison_service = ComparisonService()
+
+    # Generate system logos if they don't exist
+    try:
+        logo_paths = LogoGenerator.ensure_logos_exist()
+        app.config['LOGO_PATH'] = logo_paths['logo']
+        app.config['FAVICON_PATH'] = logo_paths['favicon']
+    except Exception as e:
+        app.logger.warning(f'Failed to generate logos: {str(e)}')
+
+    # Initialize timeout middleware for request handling
+    init_timeout_middleware(app)
 
     # Register blueprints
     from app.routes import auth, main, admin, simulation

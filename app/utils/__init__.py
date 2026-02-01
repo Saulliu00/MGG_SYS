@@ -34,6 +34,7 @@ from .validators import (
 from .file_handler import FileHandler
 from .subprocess_runner import SubprocessRunner
 from .plotter import Plotter
+from .logo_generator import LogoGenerator
 
 __all__ = [
     # Paths
@@ -68,4 +69,5 @@ __all__ = [
     'FileHandler',
     'SubprocessRunner',
     'Plotter',
+    'LogoGenerator',
 ]
