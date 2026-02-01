@@ -149,19 +149,7 @@
             <!-- Tab Contents -->
             <!-- Simulation Tab -->
             <div id="simulation" class="tab-content active">
-                <div class="action-buttons">
-                    <button type="button" class="btn btn-primary" onclick="runSimulation()">
-                        <i class="fas fa-play"></i> 计算
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="alert('另存为功能待实现')">
-                        <i class="fas fa-save"></i> 另存为
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="addModelOption()">
-                        <i class="fas fa-plus"></i> 加载模型
-                    </button>
-                </div>
-
-                <div class="chart-container mt-4">
+                <div class="chart-container">
                     <div class="chart-header">计算结果</div>
                     <div class="chart-info">
                         多项式拟合 (Degree=3, 中标R²=1.0000)<br>
@@ -180,12 +168,6 @@
                         <p>点击上传测试数据文件 (.xlsx)</p>
                         <p style="font-size: 0.9rem; color: #7f8c8d;">文件应包含时间和压力两列数据</p>
                     </label>
-                </div>
-
-                <div class="action-buttons">
-                    <button type="button" class="btn btn-success" onclick="uploadTestResult()">
-                        <i class="fas fa-upload"></i> 上传并存储
-                    </button>
                 </div>
             </div>
 
