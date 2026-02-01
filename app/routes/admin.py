@@ -1,8 +1,10 @@
-from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
 from functools import wraps
 from app import db
 from app.models import User
+from app.utils import log_manager
+from app.config.logging_config import ADMIN_LOG_VIEW
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -91,3 +93,76 @@ def reset_password(user_id):
     db.session.commit()
 
     return jsonify({'success': True, 'message': '密码已重置'})
+
+# ============================================================
+# System Logs Routes
+# ============================================================
+
+@bp.route('/logs')
+@login_required
+@admin_required
+def logs():
+    """View system logs"""
+    if not ADMIN_LOG_VIEW.get('enabled', True):
+        flash('日志查看功能已禁用', 'warning')
+        return redirect(url_for('admin.index'))
+
+    # Get log file list
+    log_files = log_manager.get_log_files()
+
+    # Get statistics
+    stats = log_manager.get_log_statistics()
+
+    return render_template('admin/logs.html', log_files=log_files, stats=stats)
+
+@bp.route('/logs/view')
+@login_required
+@admin_required
+def view_log():
+    """View specific log file contents"""
+    filename = request.args.get('filename')
+    max_rows = int(request.args.get('max_rows', ADMIN_LOG_VIEW.get('max_rows_display', 1000)))
+
+    # Read log entries
+    if filename:
+        entries = log_manager.read_log_file(filename, max_rows=max_rows)
+    else:
+        entries = log_manager.read_log_file(max_rows=max_rows)
+
+    return jsonify({
+        'success': True,
+        'filename': filename or log_manager.current_log_file,
+        'entries': entries,
+        'count': len(entries)
+    })
+
+@bp.route('/logs/download/<filename>')
+@login_required
+@admin_required
+def download_log(filename):
+    """Download a log file"""
+    if not ADMIN_LOG_VIEW.get('download_enabled', True):
+        flash('日志下载功能已禁用', 'warning')
+        return redirect(url_for('admin.logs'))
+
+    import os
+    from app.config.logging_config import LOG_DIR
+
+    filepath = os.path.join(LOG_DIR, filename)
+
+    if not os.path.exists(filepath):
+        flash('日志文件不存在', 'danger')
+        return redirect(url_for('admin.logs'))
+
+    return send_file(filepath, as_attachment=True, download_name=filename)
+
+@bp.route('/logs/statistics')
+@login_required
+@admin_required
+def log_statistics():
+    """Get log statistics as JSON"""
+    stats = log_manager.get_log_statistics()
+    return jsonify({
+        'success': True,
+        'statistics': stats
+    })

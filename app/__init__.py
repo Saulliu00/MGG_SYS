@@ -12,7 +12,7 @@ from app.config.network_config import (
     NETWORK_LOGGING
 )
 from app.utils import LogoGenerator
-from app.middleware import init_timeout_middleware
+from app.middleware import init_timeout_middleware, init_logging_middleware
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -82,6 +82,9 @@ def create_app():
 
     # Initialize timeout middleware for request handling
     init_timeout_middleware(app)
+
+    # Initialize logging middleware for system logging
+    init_logging_middleware(app)
 
     # Register blueprints
     from app.routes import auth, main, admin, simulation

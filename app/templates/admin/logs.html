@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}系统日志 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-file-alt"></i> 系统日志</h2>
+            <p class="text-muted">查看和管理系统操作日志</p>
+        </div>
+    </div>
+
+    <!-- Log Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">日志文件</h5>
+                    <h3 class="mb-0">{{ stats.total_files }}</h3>
+                    <small class="text-muted">总文件数</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">存储使用</h5>
+                    <h3 class="mb-0">{{ stats.total_size_gb }} GB</h3>
+                    <small class="text-muted">总大小 / {{ stats.max_size_gb }} GB</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">使用率</h5>
+                    <h3 class="mb-0">{{ stats.usage_percent }}%</h3>
+                    <small class="text-muted">存储空间使用率</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">当前日志</h5>
+                    <h6 class="mb-0 text-truncate">{{ stats.current_log_file }}</h6>
+                    <small class="text-muted">活动日志文件</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Files List -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> 日志文件列表</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>文件名</th>
+                                    <th>大小</th>
+                                    <th>修改时间</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log_file in log_files %}
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-file-csv text-success"></i>
+                                        {{ log_file.filename }}
+                                        {% if log_file.is_current %}
+                                        <span class="badge bg-primary">当前</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ log_file.size_mb }} MB</td>
+                                    <td>{{ log_file.modified[:19] }}</td>
+                                    <td>
+                                        <span class="badge bg-success">可用</span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" onclick="viewLog('{{ log_file.filename }}')">
+                                            <i class="fas fa-eye"></i> 查看
+                                        </button>
+                                        <a href="{{ url_for('admin.download_log', filename=log_file.filename) }}"
+                                           class="btn btn-sm btn-success">
+                                            <i class="fas fa-download"></i> 下载
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Viewer -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-search"></i> 日志查看器</h5>
+                    <div>
+                        <select id="logFileSelect" class="form-select form-select-sm d-inline-block" style="width: auto;">
+                            <option value="">当前日志</option>
+                            {% for log_file in log_files %}
+                            <option value="{{ log_file.filename }}">{{ log_file.filename }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-sm btn-primary" onclick="loadLogEntries()">
+                            <i class="fas fa-refresh"></i> 刷新
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="logEntriesContainer">
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-info-circle"></i> 选择日志文件并点击"查看"按钮
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.log-entry {
+    border-left: 3px solid #dee2e6;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.log-entry.level-INFO {
+    border-left-color: #0d6efd;
+}
+
+.log-entry.level-WARNING {
+    border-left-color: #ffc107;
+}
+
+.log-entry.level-ERROR {
+    border-left-color: #dc3545;
+}
+
+.log-entry.level-CRITICAL {
+    border-left-color: #6f42c1;
+}
+
+.log-entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.log-entry-timestamp {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.log-entry-level {
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+}
+
+.level-INFO { background: #cfe2ff; color: #084298; }
+.level-WARNING { background: #fff3cd; color: #664d03; }
+.level-ERROR { background: #f8d7da; color: #842029; }
+.level-CRITICAL { background: #e2d9f3; color: #3d0a91; }
+
+.log-entry-message {
+    font-size: 0.9rem;
+    margin-bottom: 3px;
+}
+
+.log-entry-details {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.log-entry-error {
+    background: #fff5f5;
+    border: 1px solid #feb2b2;
+    padding: 8px;
+    margin-top: 5px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: #c53030;
+}
+</style>
+
+<script>
+function viewLog(filename) {
+    document.getElementById('logFileSelect').value = filename;
+    loadLogEntries();
+}
+
+async function loadLogEntries() {
+    const filename = document.getElementById('logFileSelect').value;
+    const container = document.getElementById('logEntriesContainer');
+
+    // Show loading
+    container.innerHTML = '<div class="text-center py-4"><div class="spinner-border" role="status"></div><p class="mt-2">加载中...</p></div>';
+
+    try {
+        const url = filename
+            ? `/admin/logs/view?filename=${encodeURIComponent(filename)}`
+            : '/admin/logs/view';
+
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (result.success) {
+            displayLogEntries(result.entries);
+        } else {
+            container.innerHTML = '<div class="alert alert-danger">加载失败</div>';
+        }
+    } catch (error) {
+        container.innerHTML = `<div class="alert alert-danger">错误: ${error.message}</div>`;
+    }
+}
+
+function displayLogEntries(entries) {
+    const container = document.getElementById('logEntriesContainer');
+
+    if (entries.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-inbox"></i> 没有日志记录</div>';
+        return;
+    }
+
+    let html = `<div class="mb-2"><strong>显示 ${entries.length} 条记录</strong></div>`;
+
+    entries.forEach(entry => {
+        const level = entry.level || 'INFO';
+        const hasError = entry.error || entry.traceback;
+
+        html += `
+            <div class="log-entry level-${level}">
+                <div class="log-entry-header">
+                    <div>
+                        <span class="log-entry-level level-${level}">${level}</span>
+                        ${entry.username ? `<span class="badge bg-secondary ms-2"><i class="fas fa-user"></i> ${entry.username}</span>` : ''}
+                        ${entry.action ? `<span class="badge bg-info ms-2">${entry.action}</span>` : ''}
+                    </div>
+                    <span class="log-entry-timestamp">${entry.timestamp || entry.date + ' ' + entry.time}</span>
+                </div>
+                <div class="log-entry-message">
+                    ${entry.message || ''}
+                </div>
+                <div class="log-entry-details">
+                    ${entry.method ? `<span class="me-2"><strong>${entry.method}</strong> ${entry.path || entry.endpoint}</span>` : ''}
+                    ${entry.status_code ? `<span class="me-2">状态: ${entry.status_code}</span>` : ''}
+                    ${entry.duration_ms ? `<span class="me-2">耗时: ${entry.duration_ms}ms</span>` : ''}
+                    ${entry.ip_address ? `<span class="me-2">IP: ${entry.ip_address}</span>` : ''}
+                </div>
+                ${hasError ? `
+                    <div class="log-entry-error">
+                        <strong>错误:</strong> ${entry.error || ''}<br>
+                        ${entry.traceback ? `<pre style="margin: 5px 0 0 0; white-space: pre-wrap;">${entry.traceback}</pre>` : ''}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// Auto-load current log on page load
+window.addEventListener('load', function() {
+    loadLogEntries();
+});
+</script>
+{% endblock %}

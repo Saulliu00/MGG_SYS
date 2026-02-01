@@ -35,6 +35,7 @@ from .file_handler import FileHandler
 from .subprocess_runner import SubprocessRunner
 from .plotter import Plotter
 from .logo_generator import LogoGenerator
+from .log_manager import log_manager, LogManager
 
 __all__ = [
     # Paths
@@ -70,4 +71,6 @@ __all__ = [
     'SubprocessRunner',
     'Plotter',
     'LogoGenerator',
+    'LogManager',
+    'log_manager',
 ]

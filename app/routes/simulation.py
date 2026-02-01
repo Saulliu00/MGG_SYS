@@ -7,6 +7,7 @@ from app.utils.errors import (
     SubprocessTimeoutError,
     DataProcessingError
 )
+from app.middleware import log_simulation_run, log_file_upload
 
 bp = Blueprint('simulation', __name__, url_prefix='/simulation')
 
@@ -28,21 +29,51 @@ def run_simulation():
     try:
         data = request.form.to_dict()
         result = current_app.simulation_service.run_forward_simulation(current_user.id, data)
+
+        # Log successful simulation
+        log_simulation_run(
+            username=current_user.username,
+            user_id=current_user.id,
+            simulation_params=data,
+            success=True
+        )
+
         return jsonify(result)
 
     except SubprocessTimeoutError as e:
+        log_simulation_run(
+            username=current_user.username,
+            user_id=current_user.id,
+            simulation_params=request.form.to_dict(),
+            success=False,
+            error=f'Timeout: {str(e)}'
+        )
         return jsonify({
             'success': False,
             'message': str(e)
         })
 
     except (SimulationError, SubprocessError) as e:
+        log_simulation_run(
+            username=current_user.username,
+            user_id=current_user.id,
+            simulation_params=request.form.to_dict(),
+            success=False,
+            error=str(e)
+        )
         return jsonify({
             'success': False,
             'message': str(e)
         })
 
     except Exception as e:
+        log_simulation_run(
+            username=current_user.username,
+            user_id=current_user.id,
+            simulation_params=request.form.to_dict(),
+            success=False,
+            error=str(e)
+        )
         return jsonify({
             'success': False,
             'message': f'Error running simulation: {str(e)}'
@@ -58,15 +89,52 @@ def upload_test_result():
 
         file = request.files['file']
         result = current_app.file_service.process_test_result_upload(file, current_user.id)
+
+        # Log successful upload
+        log_file_upload(
+            username=current_user.username,
+            user_id=current_user.id,
+            filename=file.filename,
+            file_size=len(file.read()) if hasattr(file, 'read') else 0,
+            success=True
+        )
+        # Reset file pointer after reading size
+        if hasattr(file, 'seek'):
+            file.seek(0)
+
         return jsonify(result)
 
     except FileValidationError as e:
+        log_file_upload(
+            username=current_user.username,
+            user_id=current_user.id,
+            filename=request.files['file'].filename if 'file' in request.files else 'unknown',
+            file_size=0,
+            success=False,
+            error=f'Validation error: {str(e)}'
+        )
         return jsonify({'success': False, 'message': str(e)})
 
     except DataProcessingError as e:
+        log_file_upload(
+            username=current_user.username,
+            user_id=current_user.id,
+            filename=request.files['file'].filename if 'file' in request.files else 'unknown',
+            file_size=0,
+            success=False,
+            error=f'Processing error: {str(e)}'
+        )
         return jsonify({'success': False, 'message': str(e)})
 
     except Exception as e:
+        log_file_upload(
+            username=current_user.username,
+            user_id=current_user.id,
+            filename=request.files['file'].filename if 'file' in request.files else 'unknown',
+            file_size=0,
+            success=False,
+            error=str(e)
+        )
         return jsonify({'success': False, 'message': f'文件处理错误: {str(e)}'})
 
 @bp.route('/history')
