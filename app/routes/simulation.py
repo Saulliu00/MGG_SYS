@@ -1,13 +1,12 @@
-from flask import Blueprint, render_template, request, jsonify, send_file
+from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
-from app import db
-from app.models import Simulation, TestResult
-import json
-import os
-from werkzeug.utils import secure_filename
-import pandas as pd
-import subprocess
-import sys
+from app.utils.errors import (
+    FileValidationError,
+    SimulationError,
+    SubprocessError,
+    SubprocessTimeoutError,
+    DataProcessingError
+)
 
 bp = Blueprint('simulation', __name__, url_prefix='/simulation')
 
@@ -16,180 +15,89 @@ bp = Blueprint('simulation', __name__, url_prefix='/simulation')
 def index():
     return render_template('simulation/index.html')
 
+@bp.route('/reverse')
+@login_required
+def reverse():
+    """Reverse simulation page"""
+    return render_template('simulation/reverse.html')
+
 @bp.route('/run', methods=['POST'])
 @login_required
 def run_simulation():
     """Run simulation with provided parameters"""
-    data = request.form.to_dict()
-
-    # Create new simulation record
-    simulation = Simulation(
-        user_id=current_user.id,
-        ignition_model=data.get('ignition_model'),
-        nc_type_1=data.get('nc_type_1'),
-        nc_usage_1=float(data.get('nc_usage_1', 0)),
-        nc_type_2=data.get('nc_type_2'),
-        nc_usage_2=float(data.get('nc_usage_2', 0)),
-        gp_type=data.get('gp_type'),
-        gp_usage=float(data.get('gp_usage', 0)),
-        shell_model=data.get('shell_model'),
-        current=float(data.get('current', 0)),
-        sensor_model=data.get('sensor_model'),
-        body_model=data.get('body_model'),
-        equipment=data.get('equipment'),
-        test_operator=data.get('test_operator'),
-        test_name=data.get('test_name'),
-        notes=data.get('notes')
-    )
-
-    # Run actual Python simulation script
     try:
-        nc_usage_1 = float(data.get('nc_usage_1', 0))
+        data = request.form.to_dict()
+        result = current_app.simulation_service.run_forward_simulation(current_user.id, data)
+        return jsonify(result)
 
-        # Get project root directory
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        models_path = os.path.join(project_root, 'models')
-        script_path = os.path.join(project_root, 'demo', 'run_simulation.py')
-
-        # Call the Python simulation script
-        result = subprocess.run(
-            [sys.executable, script_path, str(nc_usage_1), models_path],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-
-        if result.returncode == 0:
-            # Parse the JSON output from the script
-            response_data = json.loads(result.stdout)
-
-            if response_data.get('success'):
-                result_data = {
-                    'plot_data': response_data['plot_data'],
-                    'statistics': response_data['statistics']
-                }
-            else:
-                # Script returned an error
-                return jsonify({
-                    'success': False,
-                    'message': f"Simulation error: {response_data.get('error', 'Unknown error')}"
-                })
-        else:
-            # Script execution failed
-            return jsonify({
-                'success': False,
-                'message': f"Script execution failed: {result.stderr}"
-            })
-
-    except subprocess.TimeoutExpired:
+    except SubprocessTimeoutError as e:
         return jsonify({
             'success': False,
-            'message': 'Simulation timeout (exceeded 30 seconds)'
+            'message': str(e)
         })
+
+    except (SimulationError, SubprocessError) as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
     except Exception as e:
         return jsonify({
             'success': False,
             'message': f'Error running simulation: {str(e)}'
         })
 
-    simulation.result_data = json.dumps(result_data)
-    db.session.add(simulation)
-    db.session.commit()
-
-    return jsonify({
-        'success': True,
-        'simulation_id': simulation.id,
-        'data': result_data
-    })
-
 @bp.route('/upload', methods=['POST'])
 @login_required
 def upload_test_result():
     """Upload actual test result file (.xlsx)"""
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'message': '没有上传文件'})
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': '没有上传文件'})
 
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'message': '文件名为空'})
+        file = request.files['file']
+        result = current_app.file_service.process_test_result_upload(file, current_user.id)
+        return jsonify(result)
 
-    if file and file.filename.endswith('.xlsx'):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join('app/static/uploads', filename)
-        file.save(filepath)
+    except FileValidationError as e:
+        return jsonify({'success': False, 'message': str(e)})
 
-        # Read Excel file
-        try:
-            df = pd.read_excel(filepath)
-            # Assume columns are 'Time' and 'Pressure'
-            data = {
-                'time': df.iloc[:, 0].tolist(),
-                'pressure': df.iloc[:, 1].tolist()
-            }
+    except DataProcessingError as e:
+        return jsonify({'success': False, 'message': str(e)})
 
-            test_result = TestResult(
-                user_id=current_user.id,
-                filename=filename,
-                file_path=filepath,
-                data=json.dumps(data)
-            )
-            db.session.add(test_result)
-            db.session.commit()
-
-            return jsonify({
-                'success': True,
-                'test_result_id': test_result.id,
-                'data': data
-            })
-        except Exception as e:
-            return jsonify({'success': False, 'message': f'文件解析错误: {str(e)}'})
-
-    return jsonify({'success': False, 'message': '仅支持 .xlsx 格式文件'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'文件处理错误: {str(e)}'})
 
 @bp.route('/history')
 @login_required
 def history():
     """View simulation history"""
-    simulations = Simulation.query.filter_by(user_id=current_user.id).order_by(Simulation.created_at.desc()).all()
+    simulations = current_app.simulation_service.get_simulation_history(current_user.id)
     return render_template('simulation/history.html', simulations=simulations)
 
 @bp.route('/predict', methods=['POST'])
 def predict():
     """Run prediction for demo (no authentication required)"""
     try:
-        # Get NC用量1 from request
         data = request.get_json()
         nc_usage_1 = float(data.get('nc_usage_1', 0))
 
-        # Get project root directory
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        models_path = os.path.join(project_root, 'models')
-        script_path = os.path.join(project_root, 'demo', 'run_simulation.py')
+        result = current_app.simulation_service.run_prediction(nc_usage_1)
+        return jsonify(result)
 
-        # Call the Python simulation script
-        result = subprocess.run(
-            [sys.executable, script_path, str(nc_usage_1), models_path],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-
-        if result.returncode == 0:
-            # Parse the JSON output from the script
-            response_data = json.loads(result.stdout)
-            return jsonify(response_data)
-        else:
-            # Script execution failed
-            return jsonify({
-                'success': False,
-                'error': f"Script execution failed: {result.stderr}"
-            }), 500
-
-    except subprocess.TimeoutExpired:
+    except SubprocessTimeoutError as e:
         return jsonify({
             'success': False,
-            'error': 'Simulation timeout (exceeded 30 seconds)'
+            'error': str(e)
         }), 500
+
+    except (SimulationError, SubprocessError) as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
     except Exception as e:
         return jsonify({
             'success': False,
@@ -200,7 +108,6 @@ def predict():
 def save_to_data_folder():
     """Save uploaded .xlsx file to demo/data folder with NC value naming (no authentication required)"""
     try:
-        # Check if file was uploaded
         if 'file' not in request.files:
             return jsonify({
                 'success': False,
@@ -208,44 +115,17 @@ def save_to_data_folder():
             }), 400
 
         file = request.files['file']
-        if file.filename == '':
-            return jsonify({
-                'success': False,
-                'error': '文件名为空'
-            }), 400
-
-        if not file.filename.endswith('.xlsx'):
-            return jsonify({
-                'success': False,
-                'error': '仅支持 .xlsx 格式文件'
-            }), 400
-
-        # Get NC value and custom filename from request
         nc_value = request.form.get('nc_value')
         custom_name = request.form.get('custom_name', 'value')
 
-        if not nc_value:
-            return jsonify({
-                'success': False,
-                'error': 'NC用量1值未提供'
-            }), 400
+        result = current_app.file_service.save_to_demo_data_folder(file, nc_value, custom_name)
+        return jsonify(result)
 
-        # Create filename: {nc_value}_{custom_name}.xlsx
-        new_filename = f"{nc_value}_{custom_name}.xlsx"
-
-        # Save to demo/data folder
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        data_dir = os.path.join(project_root, 'demo', 'data')
-        os.makedirs(data_dir, exist_ok=True)
-
-        file_path = os.path.join(data_dir, new_filename)
-        file.save(file_path)
-
+    except FileValidationError as e:
         return jsonify({
-            'success': True,
-            'filename': new_filename,
-            'message': f'文件已保存到 demo/data/{new_filename}'
-        })
+            'success': False,
+            'error': str(e)
+        }), 400
 
     except Exception as e:
         return jsonify({
@@ -258,7 +138,6 @@ def save_to_data_folder():
 def load_test_data():
     """Load test data from uploaded .xlsx file for comparison (no authentication required)"""
     try:
-        # Check if file was uploaded
         if 'file' not in request.files:
             return jsonify({
                 'success': False,
@@ -266,59 +145,27 @@ def load_test_data():
             }), 400
 
         file = request.files['file']
-        if file.filename == '':
-            return jsonify({
-                'success': False,
-                'error': '文件名为空'
-            }), 400
+        result = current_app.file_service.load_test_data_file(file)
+        return jsonify(result)
 
-        if not file.filename.endswith('.xlsx'):
-            return jsonify({
-                'success': False,
-                'error': '仅支持 .xlsx 格式文件'
-            }), 400
-
-        # Save file temporarily
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        temp_dir = os.path.join(project_root, 'demo', 'temp')
-        os.makedirs(temp_dir, exist_ok=True)
-
-        filename = secure_filename(file.filename)
-        temp_path = os.path.join(temp_dir, filename)
-        file.save(temp_path)
-
-        # Call the Python script to load and process the test data
-        script_path = os.path.join(project_root, 'demo', 'load_test_data.py')
-
-        result = subprocess.run(
-            [sys.executable, script_path, temp_path],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-
-        # Clean up temp file
-        try:
-            os.remove(temp_path)
-        except:
-            pass
-
-        if result.returncode == 0:
-            # Parse the JSON output from the script
-            response_data = json.loads(result.stdout)
-            return jsonify(response_data)
-        else:
-            # Script execution failed
-            return jsonify({
-                'success': False,
-                'error': f"Failed to process file: {result.stderr}"
-            }), 500
-
-    except subprocess.TimeoutExpired:
+    except FileValidationError as e:
         return jsonify({
             'success': False,
-            'error': 'File processing timeout (exceeded 30 seconds)'
+            'error': str(e)
+        }), 400
+
+    except SubprocessTimeoutError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
+
+    except SubprocessError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
     except Exception as e:
         return jsonify({
             'success': False,

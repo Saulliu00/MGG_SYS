@@ -36,6 +36,12 @@ def create_app():
     login_manager.login_view = 'auth.login'
     login_manager.login_message = '请先登录以访问此页面'
 
+    # Initialize services and attach to app
+    from app.services import SimulationService, FileService, ComparisonService
+    app.simulation_service = SimulationService(db)
+    app.file_service = FileService(db)
+    app.comparison_service = ComparisonService()
+
     # Register blueprints
     from app.routes import auth, main, admin, simulation
 

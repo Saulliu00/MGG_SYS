@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}逆向预测 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <div class="simulation-container">
+        <!-- Left Panel - Input Parameters -->
+        <div class="panel parameters-panel">
+            <div class="panel-title">输入参数</div>
+
+            <form id="reverseSimulationForm">
+                <h6 style="color: #667eea; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #667eea; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                    <i class="fas fa-star"></i> 必填参数
+                </h6>
+
+                <div class="form-group">
+                    <label>管壳高度:</label>
+                    <select name="shell_height" class="form-control" required>
+                        <option value="">请选择...</option>
+                        <option value="18">18</option>
+                        <option value="19">19</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>通电条件:</label>
+                    <select name="current" class="form-control" required>
+                        <option value="">请选择...</option>
+                        <option value="1.2">1.2</option>
+                        <option value="1.5">1.5</option>
+                        <option value="2.0">2.0</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>传感器量程:</label>
+                    <select name="sensor_range" class="form-control" required>
+                        <option value="">请选择...</option>
+                        <option value="30">30</option>
+                        <option value="31">31</option>
+                        <option value="32">32</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>容积:</label>
+                    <select name="volume" class="form-control" required>
+                        <option value="">请选择...</option>
+                        <option value="3.5">3.5</option>
+                        <option value="4.0">4.0</option>
+                        <option value="4.5">4.5</option>
+                    </select>
+                </div>
+
+                <h6 style="color: #95a5a6; font-weight: bold; margin-top: 1rem; margin-bottom: 0.65rem; border-bottom: 2px solid #95a5a6; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                    <i class="fas fa-circle"></i> 可选参数
+                </h6>
+
+                <div class="form-group">
+                    <label>点火具:</label>
+                    <select name="igniter" class="form-control">
+                        <option value="">无</option>
+                        <option value="115">115</option>
+                        <option value="116">116</option>
+                        <option value="117">117</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>测试设备:</label>
+                    <select name="device" class="form-control">
+                        <option value="">无</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+
+        <!-- Middle Panel - File Upload -->
+        <div class="panel test-info-panel">
+            <div class="panel-title">压力数据上传</div>
+
+            <!-- File Input (hidden) -->
+            <input type="file" id="reverseFileInput" accept=".xlsx" style="display: none;">
+
+            <div class="upload-section" onclick="document.getElementById('reverseFileInput').click()">
+                <i class="fas fa-cloud-upload-alt fa-2x" style="color: #667eea;"></i>
+                <p style="margin-top: 0.5rem; font-weight: bold; margin-bottom: 0.25rem;">点击上传压力曲线文件 (.xlsx)</p>
+                <p style="font-size: 0.82rem; color: #7f8c8d; margin-bottom: 0.25rem;">文件应包含时间和压力两列数据</p>
+            </div>
+
+            <div style="margin-top: 1rem; background: #f8f9fa; padding: 0.75rem; border-radius: 6px; border-left: 4px solid #667eea;">
+                <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.85rem;">
+                    <i class="fas fa-info-circle"></i> 文件命名规范
+                </h6>
+                <p style="font-size: 0.82rem; color: #5a6c7d; margin-bottom: 0.35rem;">
+                    <strong>格式：</strong><code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.8rem;">测试名称_日期_编号.xlsx</code>
+                </p>
+                <p style="font-size: 0.82rem; color: #5a6c7d; margin-bottom: 0.65rem;">
+                    <strong>示例：</strong><code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.8rem;">压力测试_20260106_001.xlsx</code>
+                </p>
+
+                <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; margin-top: 0.75rem; font-size: 0.85rem;">
+                    <i class="fas fa-table"></i> Excel格式要求
+                </h6>
+                <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #667eea; color: white;">
+                            <th style="padding: 0.35rem; border: 1px solid #ddd;">列名</th>
+                            <th style="padding: 0.35rem; border: 1px solid #ddd;">单位</th>
+                            <th style="padding: 0.35rem; border: 1px solid #ddd;">示例</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">时间</td>
+                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">ms</td>
+                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">0, 1, 2, ...</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">压力</td>
+                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">MPa</td>
+                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">0.5, 12.3, 45.6, ...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Right Panel - Results -->
+        <div class="panel results-panel">
+            <div class="panel-title">逆向预测结果</div>
+
+            <div style="text-align: center; margin-bottom: 1rem;">
+                <button type="button" class="btn btn-primary" style="width: 80%; padding: 0.65rem; font-size: 0.95rem;" onclick="runReverseSimulation()">
+                    <i class="fas fa-play"></i> 仿真
+                </button>
+            </div>
+
+            <div id="reverseResults" style="display: none;">
+                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.65rem;">
+                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #667eea; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                        <i class="fas fa-flask"></i> NC配方预测
+                    </h6>
+                    <div class="form-group">
+                        <label>NC类型:</label>
+                        <input type="text" id="predicted_nc_type" class="form-control" readonly style="background: white; font-weight: bold; color: #667eea;">
+                    </div>
+                    <div class="form-group">
+                        <label>NC用量 (毫克):</label>
+                        <input type="text" id="predicted_nc_amount" class="form-control" readonly style="background: white; font-weight: bold; color: #667eea;">
+                    </div>
+                </div>
+
+                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px;">
+                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #27ae60; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                        <i class="fas fa-vial"></i> GP配方预测
+                    </h6>
+                    <div class="form-group">
+                        <label>GP类型:</label>
+                        <input type="text" id="predicted_gp_type" class="form-control" readonly style="background: white; font-weight: bold; color: #27ae60;">
+                    </div>
+                    <div class="form-group">
+                        <label>GP用量 (毫克):</label>
+                        <input type="text" id="predicted_gp_amount" class="form-control" readonly style="background: white; font-weight: bold; color: #27ae60;">
+                    </div>
+                </div>
+
+                <div style="margin-top: 0.75rem; padding: 0.65rem; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #27ae60;">
+                    <p style="margin: 0; font-size: 0.82rem; color: #2c3e50;">
+                        <i class="fas fa-check-circle" style="color: #27ae60;"></i>
+                        <strong>置信度：</strong><span id="confidence_score">--</span>
+                    </p>
+                </div>
+            </div>
+
+            <div id="reverseResultsPlaceholder" style="text-align: center; padding: 2rem 0.75rem; color: #95a5a6;">
+                <i class="fas fa-arrow-up" style="font-size: 2rem; margin-bottom: 0.65rem;"></i>
+                <p style="font-size: 0.85rem; margin-bottom: 0.25rem;">上传压力数据并点击"仿真"按钮</p>
+                <p style="font-size: 0.82rem;">系统将预测所需的配方参数</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let reversePressureData = null;
+
+    // Handle file upload
+    document.getElementById('reverseFileInput').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!file.name.endsWith('.xlsx')) {
+            alert('请上传.xlsx格式的文件');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Show loading message
+        const placeholder = document.getElementById('reverseResultsPlaceholder');
+        placeholder.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #667eea;"></i><p style="margin-top: 0.5rem;">正在读取文件...</p>';
+
+        fetch('/simulation/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                reversePressureData = data.data;
+                placeholder.innerHTML = '<i class="fas fa-check-circle" style="font-size: 2rem; color: #27ae60;"></i><p style="margin-top: 0.5rem; color: #27ae60; font-weight: bold;">文件已上传：' + file.name + '</p><p style="font-size: 0.82rem;">点击"仿真"按钮开始预测</p>';
+            } else {
+                placeholder.innerHTML = '<i class="fas fa-exclamation-circle" style="font-size: 2rem; color: #e74c3c;"></i><p style="margin-top: 0.5rem; color: #e74c3c;">文件读取失败</p>';
+                alert('文件读取失败: ' + (data.message || '未知错误'));
+            }
+        })
+        .catch(error => {
+            placeholder.innerHTML = '<i class="fas fa-exclamation-circle" style="font-size: 2rem; color: #e74c3c;"></i><p style="margin-top: 0.5rem; color: #e74c3c;">上传失败</p>';
+            console.error('Error:', error);
+            alert('文件上传失败');
+        });
+    });
+
+    // Run reverse simulation
+    function runReverseSimulation() {
+        if (!reversePressureData) {
+            alert('请先上传压力数据文件');
+            return;
+        }
+
+        // Get form values
+        const form = document.getElementById('reverseSimulationForm');
+        const formData = new FormData(form);
+
+        // Validate required fields
+        const requiredFields = ['shell_height', 'current', 'sensor_range', 'volume'];
+        for (let field of requiredFields) {
+            if (!formData.get(field)) {
+                alert('请填写所有必填参数');
+                return;
+            }
+        }
+
+        // Show loading
+        const resultsDiv = document.getElementById('reverseResults');
+        const placeholderDiv = document.getElementById('reverseResultsPlaceholder');
+
+        placeholderDiv.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #667eea;"></i><p style="margin-top: 0.5rem;">正在运行逆向预测...</p>';
+
+        // Simulate reverse prediction (mock for now)
+        setTimeout(() => {
+            // Mock prediction results
+            const pressureValues = reversePressureData.pressure || [];
+            const peakPressure = Math.max(...pressureValues);
+            const avgPressure = pressureValues.reduce((a, b) => a + b, 0) / pressureValues.length;
+
+            const ncTypes = ['D', 'E', 'F'];
+            const predictedNCType = ncTypes[Math.floor(Math.random() * ncTypes.length)];
+            const predictedNCAmount = (peakPressure / 1.2).toFixed(1);
+
+            const gpTypes = ['A', 'B', 'C'];
+            const predictedGPType = gpTypes[Math.floor(Math.random() * gpTypes.length)];
+            const predictedGPAmount = (avgPressure * 0.8).toFixed(1);
+
+            const confidenceScore = (92 + Math.random() * 6).toFixed(1);
+
+            // Update results
+            document.getElementById('predicted_nc_type').value = predictedNCType;
+            document.getElementById('predicted_nc_amount').value = predictedNCAmount;
+            document.getElementById('predicted_gp_type').value = predictedGPType;
+            document.getElementById('predicted_gp_amount').value = predictedGPAmount;
+            document.getElementById('confidence_score').textContent = confidenceScore + '%';
+
+            // Show results
+            resultsDiv.style.display = 'block';
+            placeholderDiv.style.display = 'none';
+        }, 1500);
+    }
+</script>
+{% endblock %}
