@@ -1,7 +1,8 @@
 """Comparison service for PT curve analysis"""
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from app.utils.errors import DataProcessingError
+from app.utils.plotter import Plotter
 
 
 class ComparisonService:
@@ -209,3 +210,29 @@ class ComparisonService:
 
         except Exception as e:
             raise DataProcessingError(f'Error generating chart data: {str(e)}')
+
+    @staticmethod
+    def generate_comparison_chart(
+        simulation_data: Optional[Dict] = None,
+        test_data: Optional[Dict] = None
+    ) -> Dict:
+        """
+        Generate a Plotly comparison chart figure.
+
+        Args:
+            simulation_data: Dictionary with 'time' and 'pressure' keys (optional)
+            test_data: Dictionary with 'time' and 'pressure' keys (optional)
+
+        Returns:
+            Dict: Plotly figure as JSON-serializable dict
+
+        Raises:
+            DataProcessingError: If chart generation fails
+        """
+        try:
+            return Plotter.create_comparison_chart(
+                simulation_data=simulation_data,
+                test_data=test_data
+            )
+        except Exception as e:
+            raise DataProcessingError(f'Error generating comparison chart: {str(e)}')

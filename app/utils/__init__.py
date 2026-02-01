@@ -33,6 +33,7 @@ from .validators import (
 
 from .file_handler import FileHandler
 from .subprocess_runner import SubprocessRunner
+from .plotter import Plotter
 
 __all__ = [
     # Paths
@@ -66,4 +67,5 @@ __all__ = [
     # Handlers
     'FileHandler',
     'SubprocessRunner',
+    'Plotter',
 ]

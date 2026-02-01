@@ -588,3 +588,35 @@ table tr:hover {
 ::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
+
+/* Chart Container Styles */
+.chart-container {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-top: 1rem;
+}
+
+.chart-header {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #667eea;
+}
+
+.chart-info {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+#chartDiv, #comparisonChart {
+    min-height: 400px;
+    width: 100%;
+}

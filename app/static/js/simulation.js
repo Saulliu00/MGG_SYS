@@ -16,8 +16,9 @@ function switchTab(tabName) {
 }
 
 // Simulation data storage
-let simulationData = null;
-let testData = null;
+let simulationData = null;       // {time: [...], pressure: [...]}
+let simulationPlotData = null;   // Complete Plotly figure from backend
+let testData = null;             // {time: [...], pressure: [...]}
 
 // Run simulation
 async function runSimulation() {
@@ -33,8 +34,22 @@ async function runSimulation() {
         const result = await response.json();
 
         if (result.success) {
-            simulationData = result.data;
-            plotChart();
+            // Store complete Plotly figure from backend
+            simulationPlotData = result.data.plot_data;
+
+            // Extract arrays for comparison features
+            if (simulationPlotData && simulationPlotData.data && simulationPlotData.data.length > 0) {
+                const time = simulationPlotData.data[0].x;
+                const pressure = simulationPlotData.data[0].y;
+                simulationData = { time, pressure };
+            }
+
+            // Update statistics display
+            updateSimulationInfo(result.data.statistics);
+
+            // Render the simulation chart
+            plotSimulationChart();
+
             alert('仿真计算完成！');
         } else {
             alert('仿真失败：' + result.message);
@@ -43,6 +58,35 @@ async function runSimulation() {
         console.error('Error:', error);
         alert('仿真过程中发生错误');
     }
+}
+
+// Update simulation info display
+function updateSimulationInfo(statistics) {
+    const chartInfo = document.querySelector('#simulation .chart-info');
+    if (chartInfo && statistics) {
+        const r2 = statistics.r_squared ? statistics.r_squared.toFixed(4) : '1.0000';
+        const peak = statistics.peak_pressure ? statistics.peak_pressure.toFixed(1) : 'N/A';
+        const numModels = statistics.num_models || 'N/A';
+
+        chartInfo.innerHTML = `
+            多项式拟合 (模型数: ${numModels}, R²=${r2})<br>
+            峰值压力: ${peak} MPa
+        `;
+    }
+}
+
+// Plot simulation chart (for simulation tab)
+function plotSimulationChart() {
+    if (!simulationPlotData) {
+        console.warn('No simulation data to plot');
+        return;
+    }
+
+    const chartDiv = document.getElementById('chartDiv');
+
+    // Use the complete Plotly figure from backend
+    // The backend generates the figure using our plotter utility
+    Plotly.newPlot(chartDiv, simulationPlotData.data, simulationPlotData.layout, {responsive: true});
 }
 
 // Upload test result
@@ -67,8 +111,12 @@ async function uploadTestResult() {
         const result = await response.json();
 
         if (result.success) {
+            // Store test data arrays
             testData = result.data;
-            plotChart();
+
+            // Refresh comparison chart
+            plotComparisonChart();
+
             alert('测试数据上传成功！');
         } else {
             alert('上传失败：' + result.message);
@@ -79,66 +127,71 @@ async function uploadTestResult() {
     }
 }
 
-// Plot chart using Plotly
-function plotChart() {
-    const chartDiv = document.getElementById('chartDiv');
+// Plot comparison chart by requesting from backend
+async function plotComparisonChart() {
+    const comparisonChartDiv = document.getElementById('comparisonChart');
 
-    const traces = [];
-
-    // Add simulation data if exists
-    if (simulationData) {
-        traces.push({
-            x: simulationData.time,
-            y: simulationData.pressure,
-            mode: 'lines',
-            name: '仿真数据',
-            line: {
-                color: 'blue',
-                width: 2
-            }
+    try {
+        // Request backend to generate comparison chart
+        const response = await fetch('/simulation/generate_comparison_chart', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                simulation_data: simulationData,
+                test_data: testData
+            })
         });
-    }
 
-    // Add test data if exists
-    if (testData) {
-        traces.push({
-            x: testData.time,
-            y: testData.pressure,
-            mode: 'lines',
-            name: '实际数据',
-            line: {
-                color: 'red',
-                width: 2,
-                dash: 'dot'
-            }
-        });
+        const result = await response.json();
+
+        if (result.success) {
+            // Render the backend-generated chart
+            const chartFigure = result.chart;
+            Plotly.newPlot(comparisonChartDiv, chartFigure.data, chartFigure.layout, {responsive: true});
+        } else {
+            console.error('Error generating comparison chart:', result.error);
+            // Show placeholder if error
+            initializeChart('comparisonChart', 'comparison');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        // Show placeholder if error
+        initializeChart('comparisonChart', 'comparison');
     }
+}
+
+// Initialize empty chart with placeholder
+function initializeChart(chartId, chartType) {
+    const placeholderText = chartType === 'simulation'
+        ? '点击"计算"按钮开始仿真'
+        : '请先运行仿真或上传测试数据';
 
     const layout = {
-        title: '',
-        xaxis: {
-            title: 'Time (ms)',
-            gridcolor: '#e0e0e0'
-        },
-        yaxis: {
-            title: 'Pressure (MPa)',
-            gridcolor: '#e0e0e0'
-        },
+        xaxis: { title: 'Time (ms)', gridcolor: '#e0e0e0', showgrid: true },
+        yaxis: { title: 'Pressure (MPa)', gridcolor: '#e0e0e0', showgrid: true },
         plot_bgcolor: 'white',
         paper_bgcolor: 'white',
-        margin: {
-            l: 60,
-            r: 30,
-            t: 30,
-            b: 50
-        },
-        legend: {
-            x: 0.7,
-            y: 0.1
-        }
+        margin: { l: 60, r: 30, t: 30, b: 50 },
+        annotations: [{
+            text: placeholderText,
+            xref: 'paper',
+            yref: 'paper',
+            x: 0.5,
+            y: 0.5,
+            showarrow: false,
+            font: { size: 16, color: '#7f8c8d' }
+        }]
     };
 
-    Plotly.newPlot(chartDiv, traces, layout, {responsive: true});
+    Plotly.newPlot(chartId, [], layout, {responsive: true});
+}
+
+// Initialize all charts on page load
+function initializeCharts() {
+    initializeChart('chartDiv', 'simulation');
+    initializeChart('comparisonChart', 'comparison');
 }
 
 // Add model options
@@ -151,6 +204,11 @@ function triggerFileInput() {
     document.getElementById('testFileInput').click();
 }
 
+// Refresh comparison chart (called by button)
+function refreshComparison() {
+    plotComparisonChart();
+}
+
 // Display selected file name
 document.addEventListener('DOMContentLoaded', function() {
     const fileInput = document.getElementById('testFileInput');
@@ -159,7 +217,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const fileName = e.target.files[0]?.name;
             if (fileName) {
                 const label = document.querySelector('.upload-label');
-                label.innerHTML = `<i class="fas fa-file-excel"></i> ${fileName}`;
+                if (label) {
+                    label.innerHTML = `<i class="fas fa-file-excel"></i> ${fileName}`;
+                }
             }
         });
     }
@@ -167,6 +227,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialize on page load
 window.addEventListener('load', function() {
+    // Initialize empty charts
+    initializeCharts();
+
     // Set default active tab
     const firstTab = document.querySelector('.tab-btn');
     if (firstTab) {

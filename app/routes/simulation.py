@@ -171,3 +171,36 @@ def load_test_data():
             'success': False,
             'error': f'Error loading test data: {str(e)}'
         }), 500
+
+
+@bp.route('/generate_comparison_chart', methods=['POST'])
+@login_required
+def generate_comparison_chart():
+    """Generate comparison chart for simulation vs test data"""
+    try:
+        data = request.get_json()
+        simulation_data = data.get('simulation_data')
+        test_data = data.get('test_data')
+
+        # Generate chart using comparison service
+        chart_figure = current_app.comparison_service.generate_comparison_chart(
+            simulation_data=simulation_data,
+            test_data=test_data
+        )
+
+        return jsonify({
+            'success': True,
+            'chart': chart_figure
+        })
+
+    except DataProcessingError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error generating comparison chart: {str(e)}'
+        }), 500
