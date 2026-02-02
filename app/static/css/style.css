@@ -597,7 +597,7 @@ table tr:hover {
 
 #chartDiv, #comparisonChart {
     width: 100%;
-    height: calc(100vh - 320px);
-    min-height: 250px;
-    flex: 1;
+    height: calc(100vh - 420px);
+    max-height: 400px;
+    min-height: 200px;
 }
