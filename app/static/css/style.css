@@ -217,7 +217,7 @@ textarea.form-control {
     display: flex;
     flex-direction: column;
     overflow: hidden !important;
-    overflow-y: hidden !important;
+    max-width: 100%;
 }
 
 .tab-buttons {
@@ -252,11 +252,13 @@ textarea.form-control {
     display: none;
     flex: 1;
     overflow: hidden;
+    max-width: 100%;
 }
 
 .tab-content.active {
     display: flex;
     flex-direction: column;
+    max-width: 100%;
 }
 
 /* Chart Container */
@@ -265,6 +267,8 @@ textarea.form-control {
     padding: 1rem;
     border-radius: 8px;
     height: 100%;
+    width: 100%;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -597,7 +601,9 @@ table tr:hover {
 
 #chartDiv, #comparisonChart {
     width: 100%;
+    max-width: 100%;
     height: calc(100vh - 420px);
     max-height: 400px;
     min-height: 200px;
+    overflow: hidden;
 }
