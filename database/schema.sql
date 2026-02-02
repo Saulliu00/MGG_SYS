@@ -40,7 +40,17 @@ CREATE TABLE igniter_types (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE nc_types (
+CREATE TABLE nc_types1 (
+    id SERIAL PRIMARY KEY,
+    type_code VARCHAR(20) UNIQUE NOT NULL,
+    description TEXT,
+    density DECIMAL(10, 4),
+    specific_heat DECIMAL(10, 4),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE nc_types2 (
     id SERIAL PRIMARY KEY,
     type_code VARCHAR(20) UNIQUE NOT NULL,
     description TEXT,
@@ -60,6 +70,40 @@ CREATE TABLE gp_types (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE shell_types (
+    id SERIAL PRIMARY KEY,
+    type_code VARCHAR(20) UNIQUE NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE current_types (
+    id SERIAL PRIMARY KEY,
+    type_code VARCHAR(20) UNIQUE NOT NULL,
+    current_value DECIMAL(10, 4),
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE sensor_types (
+    id SERIAL PRIMARY KEY,
+    type_code VARCHAR(20) UNIQUE NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE volume_types (
+    id SERIAL PRIMARY KEY,
+    type_code VARCHAR(20) UNIQUE NOT NULL,
+    volume_value DECIMAL(10, 4),
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE test_devices (
     id SERIAL PRIMARY KEY,
     device_code VARCHAR(20) UNIQUE NOT NULL,
@@ -69,6 +113,56 @@ CREATE TABLE test_devices (
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ============================================
+-- EMPLOYEES (Test Operators)
+-- ============================================
+
+CREATE TABLE employees (
+    id SERIAL PRIMARY KEY,
+    employee_id VARCHAR(50) UNIQUE NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    department VARCHAR(50),
+    position VARCHAR(50),
+    email VARCHAR(100),
+    phone VARCHAR(20),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_employees_employee_id ON employees(employee_id);
+CREATE INDEX idx_employees_department ON employees(department);
+CREATE INDEX idx_employees_is_active ON employees(is_active);
+
+-- ============================================
+-- TICKETS (Ticket System)
+-- ============================================
+
+CREATE TABLE tickets (
+    id SERIAL PRIMARY KEY,
+    ticket_number VARCHAR(50) UNIQUE NOT NULL,
+    work_order_id INTEGER REFERENCES work_orders(id),
+    created_by INTEGER REFERENCES users(id),
+    assigned_to INTEGER REFERENCES employees(id),
+    status VARCHAR(20) DEFAULT 'open',
+    priority VARCHAR(10) DEFAULT 'normal',
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    resolution TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP,
+
+    CONSTRAINT check_ticket_status CHECK (status IN ('open', 'in_progress', 'resolved', 'closed', 'cancelled')),
+    CONSTRAINT check_ticket_priority CHECK (priority IN ('low', 'normal', 'high', 'urgent'))
+);
+
+CREATE INDEX idx_tickets_number ON tickets(ticket_number);
+CREATE INDEX idx_tickets_status ON tickets(status);
+CREATE INDEX idx_tickets_work_order ON tickets(work_order_id);
+CREATE INDEX idx_tickets_assigned_to ON tickets(assigned_to);
+CREATE INDEX idx_tickets_created_at ON tickets(created_at DESC);
 
 -- ============================================
 -- WORK ORDERS
@@ -102,15 +196,21 @@ CREATE TABLE forward_simulations (
     id SERIAL PRIMARY KEY,
     work_order_id INTEGER REFERENCES work_orders(id),
     user_id INTEGER REFERENCES users(id) NOT NULL,
+    employee_id INTEGER REFERENCES employees(id), -- Test operator
 
     -- Input Parameters
-    shell_height DECIMAL(10, 4),
-    current_condition DECIMAL(10, 4),
     igniter_type_id INTEGER REFERENCES igniter_types(id),
-    nc_type_id INTEGER REFERENCES nc_types(id),
-    nc_amount DECIMAL(10, 4), -- NC用量1 (mg)
+    nc_type1_id INTEGER REFERENCES nc_types1(id),
+    nc_amount1 DECIMAL(10, 4), -- NC用量1 (mg)
+    nc_type2_id INTEGER REFERENCES nc_types2(id),
+    nc_amount2 DECIMAL(10, 4), -- NC用量2 (mg)
     gp_type_id INTEGER REFERENCES gp_types(id),
     gp_amount DECIMAL(10, 4),
+    shell_type_id INTEGER REFERENCES shell_types(id),
+    current_type_id INTEGER REFERENCES current_types(id),
+    sensor_type_id INTEGER REFERENCES sensor_types(id),
+    volume_type_id INTEGER REFERENCES volume_types(id),
+    test_device_id INTEGER REFERENCES test_devices(id),
 
     -- Model Information
     model_version VARCHAR(50),
@@ -164,19 +264,24 @@ CREATE TABLE reverse_simulations (
     id SERIAL PRIMARY KEY,
     work_order_id INTEGER REFERENCES work_orders(id),
     user_id INTEGER REFERENCES users(id) NOT NULL,
+    employee_id INTEGER REFERENCES employees(id), -- Test operator
 
     -- Input Parameters
-    shell_height DECIMAL(10, 4),
-    current_condition DECIMAL(10, 4),
     igniter_type_id INTEGER REFERENCES igniter_types(id),
+    shell_type_id INTEGER REFERENCES shell_types(id),
+    current_type_id INTEGER REFERENCES current_types(id),
+    sensor_type_id INTEGER REFERENCES sensor_types(id),
+    volume_type_id INTEGER REFERENCES volume_types(id),
     test_device_id INTEGER REFERENCES test_devices(id),
 
     -- Uploaded Pressure Data Reference
     pressure_data_file VARCHAR(255), -- Path to uploaded file
 
     -- Prediction Results
-    predicted_nc_type_id INTEGER REFERENCES nc_types(id),
-    predicted_nc_amount DECIMAL(10, 4),
+    predicted_nc_type1_id INTEGER REFERENCES nc_types1(id),
+    predicted_nc_amount1 DECIMAL(10, 4),
+    predicted_nc_type2_id INTEGER REFERENCES nc_types2(id),
+    predicted_nc_amount2 DECIMAL(10, 4),
     predicted_gp_type_id INTEGER REFERENCES gp_types(id),
     predicted_gp_amount DECIMAL(10, 4),
     confidence_score DECIMAL(5, 2), -- 0-100%

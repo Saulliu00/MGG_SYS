@@ -40,10 +40,19 @@ This design balances performance, cost, and data retention requirements.
 - `operation_logs` - Complete audit trail of all operations
 
 #### Configuration
-- `igniter_types` - Igniter type catalog
-- `nc_types` - NC type catalog with physical properties
-- `gp_types` - GP type catalog with physical properties
-- `test_devices` - Test device registry
+- `igniter_types` - Igniter type catalog (点火具型号)
+- `nc_types1` - NC type 1 catalog with physical properties (NC类型1)
+- `nc_types2` - NC type 2 catalog with physical properties (NC类型2)
+- `gp_types` - GP type catalog with physical properties (GP类型)
+- `shell_types` - Shell type catalog (外壳型号)
+- `current_types` - Current type catalog (电流)
+- `sensor_types` - Sensor type catalog (传感器型号)
+- `volume_types` - Volume type catalog (体积型号)
+- `test_devices` - Test device registry (设备)
+
+#### Personnel & Tracking
+- `employees` - Employee registry for test operators (测试操作员)
+- `tickets` - Ticket system for work order tracking (工单系统)
 
 #### Work Management
 - `work_orders` - Work orders linking simulations and tests

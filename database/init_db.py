@@ -10,8 +10,9 @@ import logging
 
 from db_config import DatabaseManager, get_db_session
 from models import (
-    User, IgniterType, NCType, GPType, TestDevice,
-    RetentionPolicy, ModelVersion
+    User, IgniterType, NCType1, NCType2, GPType, ShellType,
+    CurrentType, SensorType, VolumeType, TestDevice,
+    Employee, Ticket, RetentionPolicy, ModelVersion
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -33,9 +34,9 @@ def create_tables():
 def seed_igniter_types():
     """Seed igniter types"""
     igniter_types = [
-        {'type_code': 'IG-001', 'description': 'Standard Igniter Type 1'},
-        {'type_code': 'IG-002', 'description': 'Standard Igniter Type 2'},
-        {'type_code': 'IG-003', 'description': 'High Performance Igniter'},
+        {'type_code': '115', 'description': 'Igniter Model 115'},
+        {'type_code': '116', 'description': 'Igniter Model 116'},
+        {'type_code': '117', 'description': 'Igniter Model 117'},
     ]
 
     try:
@@ -50,56 +51,53 @@ def seed_igniter_types():
         return False
 
 
-def seed_nc_types():
-    """Seed NC types"""
+def seed_nc_types1():
+    """Seed NC Type 1"""
     nc_types = [
-        {
-            'type_code': 'NC-50',
-            'description': 'NC50 Standard Grade',
-            'density': 1.50,
-            'specific_heat': 1.20
-        },
-        {
-            'type_code': 'NC-60',
-            'description': 'NC60 High Performance',
-            'density': 1.52,
-            'specific_heat': 1.22
-        },
-        {
-            'type_code': 'NC-70',
-            'description': 'NC70 Premium Grade',
-            'density': 1.54,
-            'specific_heat': 1.24
-        },
+        {'type_code': 'D', 'description': 'NC Type D', 'density': 1.50, 'specific_heat': 1.20},
+        {'type_code': 'E', 'description': 'NC Type E', 'density': 1.52, 'specific_heat': 1.22},
+        {'type_code': 'F', 'description': 'NC Type F', 'density': 1.54, 'specific_heat': 1.24},
     ]
 
     try:
         with get_db_session() as session:
             for nc_data in nc_types:
-                nc = NCType(**nc_data)
+                nc = NCType1(**nc_data)
                 session.add(nc)
-        logger.info(f"✓ Seeded {len(nc_types)} NC types")
+        logger.info(f"✓ Seeded {len(nc_types)} NC Type 1 entries")
         return True
     except Exception as e:
-        logger.error(f"✗ Failed to seed NC types: {str(e)}")
+        logger.error(f"✗ Failed to seed NC Type 1: {str(e)}")
+        return False
+
+
+def seed_nc_types2():
+    """Seed NC Type 2"""
+    nc_types = [
+        {'type_code': '无', 'description': 'None', 'density': 0, 'specific_heat': 0},
+        {'type_code': 'D', 'description': 'NC Type D', 'density': 1.50, 'specific_heat': 1.20},
+        {'type_code': 'E', 'description': 'NC Type E', 'density': 1.52, 'specific_heat': 1.22},
+        {'type_code': 'F', 'description': 'NC Type F', 'density': 1.54, 'specific_heat': 1.24},
+    ]
+
+    try:
+        with get_db_session() as session:
+            for nc_data in nc_types:
+                nc = NCType2(**nc_data)
+                session.add(nc)
+        logger.info(f"✓ Seeded {len(nc_types)} NC Type 2 entries")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to seed NC Type 2: {str(e)}")
         return False
 
 
 def seed_gp_types():
     """Seed GP types"""
     gp_types = [
-        {
-            'type_code': 'GP-A',
-            'description': 'GP Type A Standard',
-            'density': 1.30,
-            'specific_heat': 1.10
-        },
-        {
-            'type_code': 'GP-B',
-            'description': 'GP Type B Enhanced',
-            'density': 1.32,
-            'specific_heat': 1.12
-        },
+        {'type_code': 'A', 'description': 'GP Type A', 'density': 1.30, 'specific_heat': 1.10},
+        {'type_code': 'B', 'description': 'GP Type B', 'density': 1.32, 'specific_heat': 1.12},
+        {'type_code': 'C', 'description': 'GP Type C', 'density': 1.34, 'specific_heat': 1.14},
     ]
 
     try:
@@ -114,27 +112,92 @@ def seed_gp_types():
         return False
 
 
+def seed_shell_types():
+    """Seed shell types"""
+    shell_types = [
+        {'type_code': '18', 'description': 'Shell Model 18'},
+        {'type_code': '19', 'description': 'Shell Model 19'},
+        {'type_code': '20', 'description': 'Shell Model 20'},
+    ]
+
+    try:
+        with get_db_session() as session:
+            for shell_data in shell_types:
+                shell = ShellType(**shell_data)
+                session.add(shell)
+        logger.info(f"✓ Seeded {len(shell_types)} shell types")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to seed shell types: {str(e)}")
+        return False
+
+
+def seed_current_types():
+    """Seed current types"""
+    current_types = [
+        {'type_code': '1.2', 'current_value': 1.2, 'description': '1.2A Current'},
+        {'type_code': '1.5', 'current_value': 1.5, 'description': '1.5A Current'},
+        {'type_code': '2.0', 'current_value': 2.0, 'description': '2.0A Current'},
+    ]
+
+    try:
+        with get_db_session() as session:
+            for current_data in current_types:
+                current = CurrentType(**current_data)
+                session.add(current)
+        logger.info(f"✓ Seeded {len(current_types)} current types")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to seed current types: {str(e)}")
+        return False
+
+
+def seed_sensor_types():
+    """Seed sensor types"""
+    sensor_types = [
+        {'type_code': '30', 'description': 'Sensor Model 30'},
+        {'type_code': '31', 'description': 'Sensor Model 31'},
+        {'type_code': '32', 'description': 'Sensor Model 32'},
+    ]
+
+    try:
+        with get_db_session() as session:
+            for sensor_data in sensor_types:
+                sensor = SensorType(**sensor_data)
+                session.add(sensor)
+        logger.info(f"✓ Seeded {len(sensor_types)} sensor types")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to seed sensor types: {str(e)}")
+        return False
+
+
+def seed_volume_types():
+    """Seed volume types"""
+    volume_types = [
+        {'type_code': '3.5', 'volume_value': 3.5, 'description': '3.5 Volume'},
+        {'type_code': '4.0', 'volume_value': 4.0, 'description': '4.0 Volume'},
+        {'type_code': '4.5', 'volume_value': 4.5, 'description': '4.5 Volume'},
+    ]
+
+    try:
+        with get_db_session() as session:
+            for volume_data in volume_types:
+                volume = VolumeType(**volume_data)
+                session.add(volume)
+        logger.info(f"✓ Seeded {len(volume_types)} volume types")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to seed volume types: {str(e)}")
+        return False
+
+
 def seed_test_devices():
     """Seed test devices"""
     test_devices = [
-        {
-            'device_code': 'TD-001',
-            'device_name': 'Pressure Test Chamber 1',
-            'location': 'Lab Building A, Room 101',
-            'calibration_date': datetime(2024, 1, 15).date()
-        },
-        {
-            'device_code': 'TD-002',
-            'device_name': 'Pressure Test Chamber 2',
-            'location': 'Lab Building A, Room 102',
-            'calibration_date': datetime(2024, 1, 20).date()
-        },
-        {
-            'device_code': 'TD-003',
-            'device_name': 'High Precision Chamber',
-            'location': 'Lab Building B, Room 201',
-            'calibration_date': datetime(2024, 2, 1).date()
-        },
+        {'device_code': 'A', 'device_name': 'Test Device A', 'location': 'Lab A'},
+        {'device_code': 'B', 'device_name': 'Test Device B', 'location': 'Lab B'},
+        {'device_code': 'C', 'device_name': 'Test Device C', 'location': 'Lab C'},
     ]
 
     try:
@@ -146,6 +209,47 @@ def seed_test_devices():
         return True
     except Exception as e:
         logger.error(f"✗ Failed to seed test devices: {str(e)}")
+        return False
+
+
+def seed_employees():
+    """Seed sample employees"""
+    employees = [
+        {
+            'employee_id': 'EMP001',
+            'full_name': 'Zhang Wei',
+            'department': 'Testing',
+            'position': 'Test Engineer',
+            'email': 'zhang.wei@mgg.com',
+            'phone': '13800138001'
+        },
+        {
+            'employee_id': 'EMP002',
+            'full_name': 'Li Ming',
+            'department': 'Testing',
+            'position': 'Senior Test Engineer',
+            'email': 'li.ming@mgg.com',
+            'phone': '13800138002'
+        },
+        {
+            'employee_id': 'EMP003',
+            'full_name': 'Wang Fang',
+            'department': 'R&D',
+            'position': 'Research Engineer',
+            'email': 'wang.fang@mgg.com',
+            'phone': '13800138003'
+        },
+    ]
+
+    try:
+        with get_db_session() as session:
+            for emp_data in employees:
+                employee = Employee(**emp_data)
+                session.add(employee)
+        logger.info(f"✓ Seeded {len(employees)} employees")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Failed to seed employees: {str(e)}")
         return False
 
 
@@ -273,9 +377,15 @@ def initialize_database(drop_existing=False):
 
     success = True
     success &= seed_igniter_types()
-    success &= seed_nc_types()
+    success &= seed_nc_types1()
+    success &= seed_nc_types2()
     success &= seed_gp_types()
+    success &= seed_shell_types()
+    success &= seed_current_types()
+    success &= seed_sensor_types()
+    success &= seed_volume_types()
     success &= seed_test_devices()
+    success &= seed_employees()
     success &= seed_retention_policies()
     success &= create_admin_user()
 

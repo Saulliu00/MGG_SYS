@@ -52,8 +52,8 @@ class IgniterType(Base):
     reverse_simulations = relationship('ReverseSimulation', back_populates='igniter_type')
 
 
-class NCType(Base):
-    __tablename__ = 'nc_types'
+class NCType1(Base):
+    __tablename__ = 'nc_types1'
 
     id = Column(Integer, primary_key=True)
     type_code = Column(String(20), unique=True, nullable=False)
@@ -64,7 +64,22 @@ class NCType(Base):
     created_at = Column(DateTime, default=func.current_timestamp())
 
     # Relationships
-    forward_simulations = relationship('ForwardSimulation', back_populates='nc_type')
+    forward_simulations = relationship('ForwardSimulation', back_populates='nc_type1')
+
+
+class NCType2(Base):
+    __tablename__ = 'nc_types2'
+
+    id = Column(Integer, primary_key=True)
+    type_code = Column(String(20), unique=True, nullable=False)
+    description = Column(Text)
+    density = Column(Numeric(10, 4))
+    specific_heat = Column(Numeric(10, 4))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+
+    # Relationships
+    forward_simulations = relationship('ForwardSimulation', back_populates='nc_type2')
 
 
 class GPType(Base):
@@ -82,6 +97,64 @@ class GPType(Base):
     forward_simulations = relationship('ForwardSimulation', back_populates='gp_type')
 
 
+class ShellType(Base):
+    __tablename__ = 'shell_types'
+
+    id = Column(Integer, primary_key=True)
+    type_code = Column(String(20), unique=True, nullable=False)
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+
+    # Relationships
+    forward_simulations = relationship('ForwardSimulation', back_populates='shell_type')
+    reverse_simulations = relationship('ReverseSimulation', back_populates='shell_type')
+
+
+class CurrentType(Base):
+    __tablename__ = 'current_types'
+
+    id = Column(Integer, primary_key=True)
+    type_code = Column(String(20), unique=True, nullable=False)
+    current_value = Column(Numeric(10, 4))
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+
+    # Relationships
+    forward_simulations = relationship('ForwardSimulation', back_populates='current_type')
+    reverse_simulations = relationship('ReverseSimulation', back_populates='current_type')
+
+
+class SensorType(Base):
+    __tablename__ = 'sensor_types'
+
+    id = Column(Integer, primary_key=True)
+    type_code = Column(String(20), unique=True, nullable=False)
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+
+    # Relationships
+    forward_simulations = relationship('ForwardSimulation', back_populates='sensor_type')
+    reverse_simulations = relationship('ReverseSimulation', back_populates='sensor_type')
+
+
+class VolumeType(Base):
+    __tablename__ = 'volume_types'
+
+    id = Column(Integer, primary_key=True)
+    type_code = Column(String(20), unique=True, nullable=False)
+    volume_value = Column(Numeric(10, 4))
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+
+    # Relationships
+    forward_simulations = relationship('ForwardSimulation', back_populates='volume_type')
+    reverse_simulations = relationship('ReverseSimulation', back_populates='volume_type')
+
+
 class TestDevice(Base):
     __tablename__ = 'test_devices'
 
@@ -95,7 +168,56 @@ class TestDevice(Base):
 
     # Relationships
     test_results = relationship('TestResult', back_populates='test_device')
+    forward_simulations = relationship('ForwardSimulation', back_populates='test_device')
     reverse_simulations = relationship('ReverseSimulation', back_populates='test_device')
+
+
+class Employee(Base):
+    __tablename__ = 'employees'
+
+    id = Column(Integer, primary_key=True)
+    employee_id = Column(String(50), unique=True, nullable=False)
+    full_name = Column(String(100), nullable=False)
+    department = Column(String(50))
+    position = Column(String(50))
+    email = Column(String(100))
+    phone = Column(String(20))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    # Relationships
+    forward_simulations = relationship('ForwardSimulation', back_populates='employee')
+    reverse_simulations = relationship('ReverseSimulation', back_populates='employee')
+    tickets = relationship('Ticket', back_populates='assigned_employee')
+
+
+class Ticket(Base):
+    __tablename__ = 'tickets'
+
+    id = Column(Integer, primary_key=True)
+    ticket_number = Column(String(50), unique=True, nullable=False)
+    work_order_id = Column(Integer, ForeignKey('work_orders.id'))
+    created_by = Column(Integer, ForeignKey('users.id'))
+    assigned_to = Column(Integer, ForeignKey('employees.id'))
+    status = Column(String(20), default='open')
+    priority = Column(String(10), default='normal')
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    resolution = Column(Text)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    resolved_at = Column(DateTime)
+
+    # Relationships
+    work_order = relationship('WorkOrder', back_populates='tickets')
+    creator = relationship('User')
+    assigned_employee = relationship('Employee', back_populates='tickets')
+
+    __table_args__ = (
+        CheckConstraint("status IN ('open', 'in_progress', 'resolved', 'closed', 'cancelled')", name='check_ticket_status'),
+        CheckConstraint("priority IN ('low', 'normal', 'high', 'urgent')", name='check_ticket_priority'),
+    )
 
 
 class WorkOrder(Base):
@@ -116,6 +238,7 @@ class WorkOrder(Base):
     forward_simulations = relationship('ForwardSimulation', back_populates='work_order')
     reverse_simulations = relationship('ReverseSimulation', back_populates='work_order')
     test_results = relationship('TestResult', back_populates='work_order')
+    tickets = relationship('Ticket', back_populates='work_order')
 
     __table_args__ = (
         CheckConstraint("status IN ('pending', 'in_progress', 'completed', 'cancelled')", name='check_status'),
@@ -129,15 +252,21 @@ class ForwardSimulation(Base):
     id = Column(Integer, primary_key=True)
     work_order_id = Column(Integer, ForeignKey('work_orders.id'))
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    employee_id = Column(Integer, ForeignKey('employees.id'))
 
     # Input Parameters
-    shell_height = Column(Numeric(10, 4))
-    current_condition = Column(Numeric(10, 4))
     igniter_type_id = Column(Integer, ForeignKey('igniter_types.id'))
-    nc_type_id = Column(Integer, ForeignKey('nc_types.id'))
-    nc_amount = Column(Numeric(10, 4))
+    nc_type1_id = Column(Integer, ForeignKey('nc_types1.id'))
+    nc_amount1 = Column(Numeric(10, 4))
+    nc_type2_id = Column(Integer, ForeignKey('nc_types2.id'))
+    nc_amount2 = Column(Numeric(10, 4))
     gp_type_id = Column(Integer, ForeignKey('gp_types.id'))
     gp_amount = Column(Numeric(10, 4))
+    shell_type_id = Column(Integer, ForeignKey('shell_types.id'))
+    current_type_id = Column(Integer, ForeignKey('current_types.id'))
+    sensor_type_id = Column(Integer, ForeignKey('sensor_types.id'))
+    volume_type_id = Column(Integer, ForeignKey('volume_types.id'))
+    test_device_id = Column(Integer, ForeignKey('test_devices.id'))
 
     # Model Information
     model_version = Column(String(50))
@@ -159,9 +288,16 @@ class ForwardSimulation(Base):
     # Relationships
     user = relationship('User', back_populates='forward_simulations')
     work_order = relationship('WorkOrder', back_populates='forward_simulations')
+    employee = relationship('Employee', back_populates='forward_simulations')
     igniter_type = relationship('IgniterType', back_populates='forward_simulations')
-    nc_type = relationship('NCType', back_populates='forward_simulations')
+    nc_type1 = relationship('NCType1', back_populates='forward_simulations')
+    nc_type2 = relationship('NCType2', back_populates='forward_simulations')
     gp_type = relationship('GPType', back_populates='forward_simulations')
+    shell_type = relationship('ShellType', back_populates='forward_simulations')
+    current_type = relationship('CurrentType', back_populates='forward_simulations')
+    sensor_type = relationship('SensorType', back_populates='forward_simulations')
+    volume_type = relationship('VolumeType', back_populates='forward_simulations')
+    test_device = relationship('TestDevice', back_populates='forward_simulations')
     time_series = relationship('SimulationTimeSeries', back_populates='simulation', cascade='all, delete-orphan')
     comparisons = relationship('PTComparison', back_populates='simulation')
 
@@ -191,17 +327,22 @@ class ReverseSimulation(Base):
     id = Column(Integer, primary_key=True)
     work_order_id = Column(Integer, ForeignKey('work_orders.id'))
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    employee_id = Column(Integer, ForeignKey('employees.id'))
 
     # Input Parameters
-    shell_height = Column(Numeric(10, 4))
-    current_condition = Column(Numeric(10, 4))
     igniter_type_id = Column(Integer, ForeignKey('igniter_types.id'))
+    shell_type_id = Column(Integer, ForeignKey('shell_types.id'))
+    current_type_id = Column(Integer, ForeignKey('current_types.id'))
+    sensor_type_id = Column(Integer, ForeignKey('sensor_types.id'))
+    volume_type_id = Column(Integer, ForeignKey('volume_types.id'))
     test_device_id = Column(Integer, ForeignKey('test_devices.id'))
     pressure_data_file = Column(String(255))
 
     # Results
-    predicted_nc_type_id = Column(Integer, ForeignKey('nc_types.id'))
-    predicted_nc_amount = Column(Numeric(10, 4))
+    predicted_nc_type1_id = Column(Integer, ForeignKey('nc_types1.id'))
+    predicted_nc_amount1 = Column(Numeric(10, 4))
+    predicted_nc_type2_id = Column(Integer, ForeignKey('nc_types2.id'))
+    predicted_nc_amount2 = Column(Numeric(10, 4))
     predicted_gp_type_id = Column(Integer, ForeignKey('gp_types.id'))
     predicted_gp_amount = Column(Numeric(10, 4))
     confidence_score = Column(Numeric(5, 2))
@@ -216,7 +357,12 @@ class ReverseSimulation(Base):
     # Relationships
     user = relationship('User', back_populates='reverse_simulations')
     work_order = relationship('WorkOrder', back_populates='reverse_simulations')
+    employee = relationship('Employee', back_populates='reverse_simulations')
     igniter_type = relationship('IgniterType', back_populates='reverse_simulations')
+    shell_type = relationship('ShellType', back_populates='reverse_simulations')
+    current_type = relationship('CurrentType', back_populates='reverse_simulations')
+    sensor_type = relationship('SensorType', back_populates='reverse_simulations')
+    volume_type = relationship('VolumeType', back_populates='reverse_simulations')
     test_device = relationship('TestDevice', back_populates='reverse_simulations')
 
     __table_args__ = (
