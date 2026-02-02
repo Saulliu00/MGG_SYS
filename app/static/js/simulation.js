@@ -224,6 +224,48 @@ function refreshComparison() {
     plotComparisonChart();
 }
 
+// Handle custom option in dropdowns
+function handleCustomOption(selectElement) {
+    const customInput = selectElement.nextElementSibling;
+
+    if (selectElement.value === '__custom__') {
+        // Show custom input field
+        customInput.style.display = 'block';
+        customInput.focus();
+
+        // Listen for input changes to update the form value
+        customInput.oninput = function() {
+            // Store custom value in a data attribute
+            selectElement.dataset.customValue = this.value;
+        };
+
+        // When leaving the input, add the custom value as an option
+        customInput.onblur = function() {
+            if (this.value.trim()) {
+                // Check if custom option already exists
+                let customOption = selectElement.querySelector('option[data-custom="true"]');
+                if (customOption) {
+                    customOption.value = this.value;
+                    customOption.textContent = this.value;
+                } else {
+                    // Insert new option before "自定义..."
+                    customOption = document.createElement('option');
+                    customOption.value = this.value;
+                    customOption.textContent = this.value;
+                    customOption.dataset.custom = 'true';
+                    const customPlaceholder = selectElement.querySelector('option[value="__custom__"]');
+                    selectElement.insertBefore(customOption, customPlaceholder);
+                }
+                selectElement.value = this.value;
+            }
+        };
+    } else {
+        // Hide custom input field
+        customInput.style.display = 'none';
+        customInput.value = '';
+    }
+}
+
 // Generate work order number
 function generateWorkOrder() {
     const now = new Date();
