@@ -13,6 +13,21 @@ function switchTab(tabName) {
     // Show selected tab
     document.getElementById(tabName).classList.add('active');
     event.target.classList.add('active');
+
+    // Resize Plotly charts after tab switch (needed because charts were hidden)
+    setTimeout(function() {
+        if (tabName === 'simulation') {
+            const chartDiv = document.getElementById('chartDiv');
+            if (chartDiv && chartDiv.data) {
+                Plotly.Plots.resize(chartDiv);
+            }
+        } else if (tabName === 'comparison') {
+            const comparisonChart = document.getElementById('comparisonChart');
+            if (comparisonChart && comparisonChart.data) {
+                Plotly.Plots.resize(comparisonChart);
+            }
+        }
+    }, 50);
 }
 
 // Simulation data storage
