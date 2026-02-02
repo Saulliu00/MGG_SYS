@@ -51,7 +51,7 @@ This design balances performance, cost, and data retention requirements.
 - `test_devices` - Test device registry (设备)
 
 #### Personnel & Tracking
-- `employees` - Employee registry for test operators (测试操作员)
+- `employees` - Employee registry (工号)
 - `tickets` - Ticket system for work order tracking (工单系统)
 
 #### Work Management

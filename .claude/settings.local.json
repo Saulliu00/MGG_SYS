@@ -36,7 +36,8 @@
       "Bash(git config:*)",
       "Bash(git push:*)",
       "Bash(git restore:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git remote set-url:*)"
     ]
   }
 }
