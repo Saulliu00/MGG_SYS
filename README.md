@@ -42,13 +42,18 @@ Web App (Flask + Gunicorn)
 
 ### 1. **用户认证系统**
    - 用户登录/注册/登出
-   - 基于角色的访问控制（管理员/普通用户）
-   - 会话管理（1小时超时，24小时持久会话）
-   - 安全特性：HTTPOnly cookies, CSRF保护
+   - 三级角色访问控制：
+     - **Admin** - 全系统访问权限
+     - **实验工程师** (Lab Engineer) - 仅访问实验结果
+     - **研发工程师** (R&D Engineer) - 访问正向/逆向仿真
+   - 每日登录要求（每天0点自动过期，需重新登录）
+   - 安全特性：HTTPOnly cookies, 开放重定向防护, 路径遍历防护
    - 失败登录尝试日志记录
 
 ### 2. **仿真计算**
-   - 测试参数配置（点火具型号、NC类型、GP类型等）
+   - 测试参数配置（点火具型号、NC类型/用量、GP类型/用量、管壳高度、电流、传感器量程、容积等）
+   - 自定义输入支持（所有下拉菜单支持自定义值）
+   - 工单号自动生成
    - 实时仿真计算（120秒超时保护）
    - **Plotly交互式PT曲线图表**
    - 多项式拟合与峰值压力分析
@@ -58,13 +63,13 @@ Web App (Flask + Gunicorn)
    - 上传实际测试数据（.xlsx格式，60秒超时）
    - **仿真数据与实际数据PT曲线对比**
    - 统计分析（RMSE, 相关系数, 峰值差异）
-   - 历史记录查询与管理
+   - 实验结果页面（批量文件上传、拖拽上传）
    - Excel文件验证与处理
 
 ### 4. **管理功能**
-   - 用户添加/删除/启用/禁用
+   - 用户添加/删除/启用/禁用（支持角色分配）
    - 密码重置
-   - **系统日志查看器**（CSV格式）
+   - **系统日志查看器**（CSV格式，路径遍历防护）
    - 日志文件下载
    - 系统健康监控
 
@@ -230,7 +235,7 @@ MGG_SYS/
 │   │   ├── simulation/
 │   │   │   ├── index.html       # 正向仿真
 │   │   │   ├── reverse.html     # 逆向仿真
-│   │   │   └── history.html     # 历史记录
+│   │   │   └── history.html     # 实验结果（批量上传）
 │   │   └── admin/
 │   │       ├── index.html       # 用户管理
 │   │       └── logs.html        # 系统日志查看器
@@ -262,14 +267,15 @@ MGG_SYS/
 
 1. 登录系统后，点击侧边栏 **"MGG → 正向"**
 2. 在左侧"测试参数"面板配置：
-   - 点火具型号
-   - NC类型和用量（kg）
-   - GP类型和用量（kg）
-   - 外壳型号、电流等参数
-3. 在中间"测试信息"面板填写：
-   - 测试操作员姓名
-   - 测试名称
-   - 备注信息
+   - 点火具型号、NC类型/用量（毫克）、GP类型/用量（毫克）
+   - 管壳高度（mm）、电流、传感器量程、容积
+   - 所有下拉菜单支持"自定义..."输入
+3. 在中间"测试标准与人员"面板填写：
+   - 工号（选填）
+   - 测试名称（选填）
+   - 备注（选填）
+   - 测试设备（选填）
+   - 点击"生成工单"创建工单号
 4. 点击 **"计算"** 按钮运行仿真
 5. 仿真结果将在右侧显示：
    - **PT曲线图表**（交互式Plotly图表）
@@ -277,13 +283,13 @@ MGG_SYS/
 
 ### 上传实际测试数据
 
-1. 切换到 **"上传实际测试数据"** 标签页
+1. 切换到 **"实际数据存储"** 标签页
 2. 点击上传区域，选择 `.xlsx` 文件
    - 文件格式要求：
      - 第一列：Time (时间，单位：ms)
      - 第二列：Pressure (压力，单位：MPa)
-     - 包含表头行
-3. 点击 **"上传并存储"**
+     - 前4行为表头/元数据（自动跳过）
+3. 文件选择后自动上传
 4. 切换到 **"PT曲线对比"** 标签页查看：
    - 仿真曲线（蓝色实线）
    - 实际测试曲线（红色虚线）
@@ -304,7 +310,7 @@ MGG_SYS/
 
 1. 点击侧边栏 **"Access Control → 用户管理"**
 2. 可执行操作：
-   - **添加新用户** - 填写用户名、邮箱、密码
+   - **添加新用户** - 填写用户名、工号、密码、角色（Admin/实验工程师/研发工程师）
    - **启用/禁用** - 切换用户账户状态
    - **重置密码** - 为用户设置新密码
    - **删除用户** - 永久删除用户账户
@@ -319,13 +325,16 @@ MGG_SYS/
 | `/auth/logout` | GET | 否 | 退出登录 |
 
 ### 仿真
-| 端点 | 方法 | 认证 | 超时 | 说明 |
+| 端点 | 方法 | 认证 | 角色 | 说明 |
 |------|------|------|------|------|
-| `/simulation/` | GET | 是 | 30s | 仿真界面 |
-| `/simulation/run` | POST | 是 | 120s | 运行仿真计算 |
-| `/simulation/upload` | POST | 是 | 60s | 上传测试数据 |
-| `/simulation/history` | GET | 是 | 30s | 查看历史记录 |
-| `/simulation/generate_comparison_chart` | POST | 是 | 30s | 生成对比图表 |
+| `/simulation/` | GET | 是 | Admin/研发 | 正向仿真界面 |
+| `/simulation/reverse` | GET | 是 | Admin/研发 | 逆向仿真界面 |
+| `/simulation/run` | POST | 是 | 全部 | 运行仿真计算 |
+| `/simulation/upload` | POST | 是 | 全部 | 上传测试数据 |
+| `/simulation/history` | GET | 是 | Admin/实验 | 实验结果页面 |
+| `/simulation/experiment` | POST | 是 | Admin/实验 | 提交实验数据（批量上传） |
+| `/simulation/predict` | POST | 是 | 全部 | 运行快速预测 |
+| `/simulation/generate_comparison_chart` | POST | 是 | 全部 | 生成PT对比图表 |
 
 ### 管理
 | 端点 | 方法 | 认证 | 说明 |
@@ -350,9 +359,10 @@ MGG_SYS/
 ```python
 - id: Integer, PrimaryKey
 - username: String(80), Unique, NotNull
-- email: String(120), Unique, NotNull
-- password_hash: String(255), NotNull
-- is_admin: Boolean, Default=False
+- employee_id: String(120), Unique, NotNull  # 工号
+- password_hash: String(128), NotNull
+- role: String(20), NotNull, Default='research_engineer'
+  # 'admin' | 'lab_engineer' | 'research_engineer'
 - is_active: Boolean, Default=True
 - created_at: DateTime, Default=now()
 ```
@@ -361,16 +371,20 @@ MGG_SYS/
 ```python
 - id: Integer, PrimaryKey
 - user_id: Integer, ForeignKey(User)
-- ignition_model: String(50)
-- nc_type_1/2/3: String(50)
-- nc_usage_1/2/3: Float
-- gp_type_1/2/3: String(50)
-- gp_usage_1/2/3: Float
-- case_model: String(50)
-- electric_current: Float
-- test_operator: String(100)
-- test_name: String(200)
-- notes: Text
+- ignition_model: String(50)       # 点火具型号
+- nc_type_1/2/3: String(50)        # NC类型
+- nc_usage_1/2/3: Float            # NC用量 (毫克)
+- gp_type_1/2/3: String(50)        # GP类型
+- gp_usage_1/2/3: Float            # GP用量 (毫克)
+- shell_model: String(50)          # 管壳高度 (mm)
+- current: Float                   # 电流
+- sensor_model: String(50)         # 传感器量程
+- body_model: String(50)           # 容积
+- equipment: String(50)            # 测试设备
+- employee_id: String(100)         # 工号
+- test_name: String(200)           # 测试名称
+- notes: Text                      # 备注
+- work_order: String(50)           # 工单号
 - result_data: JSON
 - created_at: DateTime
 ```
@@ -602,6 +616,20 @@ wc -l app/log/*.csv
 
 ## 版本历史
 
+### v1.3 (2026-02-07)
+- ✨ 三级角色访问控制（Admin/实验工程师/研发工程师）
+- ✨ 每日登录要求（0点自动过期）
+- ✨ 实验结果页面重新设计（双面板布局、批量文件上传）
+- ✨ 工单号自动生成功能
+- ✨ 所有下拉菜单支持自定义输入
+- ✨ UI标签更新（管壳高度、传感器量程、容积、工号）
+- 🔒 修复开放重定向漏洞
+- 🔒 修复日志下载路径遍历漏洞
+- 🔒 所有API端点添加认证保护
+- 🐛 修复自定义下拉菜单值无法提交的问题
+- 🐛 修复字段名不匹配（test_operator → employee_id）
+- 🗑️ 清理无用JS函数
+
 ### v1.2 (2026-01-31)
 - ✨ 添加CSV格式系统日志（日志轮转与30GB自动清理）
 - ✨ 添加网络配置与多用户支持
@@ -627,16 +655,14 @@ wc -l app/log/*.csv
 ## 后续开发计划
 
 ### 短期目标
-- [ ] 实现反向仿真功能
 - [ ] 添加数据导出功能（PDF报告）
+- [ ] 自定义输入值自动保存到数据库配置表
 - [ ] 实现高级统计分析
-- [ ] 添加用户偏好设置
 
 ### 长期目标
 - [ ] 机器学习模型优化
-- [ ] 实时协作功能
+- [ ] PostgreSQL数据库迁移（参考 `database/` 文档）
 - [ ] 移动端响应式优化
-- [ ] 国际化支持（多语言）
 - [ ] API文档（Swagger/OpenAPI）
 
 ## 技术支持
@@ -664,5 +690,5 @@ wc -l app/log/*.csv
 
 ---
 
-**最后更新**: 2026-01-31
+**最后更新**: 2026-02-07
 **维护团队**: MGG开发组

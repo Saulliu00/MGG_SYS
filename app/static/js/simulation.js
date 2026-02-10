@@ -209,19 +209,9 @@ function initializeCharts() {
     initializeChart('comparisonChart', 'comparison');
 }
 
-// Add model options
-function addModelOption() {
-    alert('加载模型功能待实现');
-}
-
 // File input trigger
 function triggerFileInput() {
     document.getElementById('testFileInput').click();
-}
-
-// Refresh comparison chart (called by button)
-function refreshComparison() {
-    plotComparisonChart();
 }
 
 // Handle custom option in dropdowns
@@ -233,13 +223,7 @@ function handleCustomOption(selectElement) {
         customInput.style.display = 'block';
         customInput.focus();
 
-        // Listen for input changes to update the form value
-        customInput.oninput = function() {
-            // Store custom value in a data attribute
-            selectElement.dataset.customValue = this.value;
-        };
-
-        // When leaving the input, add the custom value as an option
+        // When leaving the input, add the custom value as a permanent option and select it
         customInput.onblur = function() {
             if (this.value.trim()) {
                 // Check if custom option already exists
@@ -256,7 +240,16 @@ function handleCustomOption(selectElement) {
                     const customPlaceholder = selectElement.querySelector('option[value="__custom__"]');
                     selectElement.insertBefore(customOption, customPlaceholder);
                 }
+                // Set the select to the custom value so FormData captures it
                 selectElement.value = this.value;
+                customInput.style.display = 'none';
+            }
+        };
+
+        // Allow pressing Enter to confirm
+        customInput.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                this.blur();
             }
         };
     } else {
@@ -280,9 +273,14 @@ function generateWorkOrder() {
     const workOrderNumber = `WO${year}${month}${day}${hours}${minutes}${seconds}${random}`;
 
     document.getElementById('workOrderNumber').textContent = workOrderNumber;
+    // Store in hidden field so it's submitted with the form
+    const hiddenInput = document.getElementById('workOrderInput');
+    if (hiddenInput) {
+        hiddenInput.value = workOrderNumber;
+    }
 }
 
-// Display selected file name
+// Handle file selection and trigger upload
 document.addEventListener('DOMContentLoaded', function() {
     const fileInput = document.getElementById('testFileInput');
     if (fileInput) {
@@ -291,8 +289,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (fileName) {
                 const label = document.querySelector('.upload-label');
                 if (label) {
-                    label.innerHTML = `<i class="fas fa-file-excel"></i> ${fileName}`;
+                    label.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在上传 ' + fileName + '...';
                 }
+                // Trigger the actual upload
+                uploadTestResult();
             }
         });
     }

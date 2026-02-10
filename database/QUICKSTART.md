@@ -114,7 +114,7 @@ python3 -c "from db_config import test_db_connection; test_db_connection()"
 psql mgg_simulation -c "\dt"
 
 # Check admin user was created
-psql mgg_simulation -c "SELECT username, role FROM users;"
+psql mgg_simulation -c "SELECT username, employee_id, role FROM users;"
 ```
 
 ---
@@ -226,4 +226,3 @@ pip install -r requirements.txt
 
 - **Full Setup Guide**: See [SETUP.md](SETUP.md)
 - **Architecture Details**: See [README.md](README.md)
-- **Code Review**: See [CODE_REVIEW.md](CODE_REVIEW.md)

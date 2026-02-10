@@ -501,6 +501,16 @@ table tr:hover {
     color: #004085;
 }
 
+.badge-secondary {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+.badge-info {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
 /* Alert Messages */
 .alert {
     padding: 1rem;

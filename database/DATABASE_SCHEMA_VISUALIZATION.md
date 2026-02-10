@@ -27,11 +27,9 @@ erDiagram
     users {
         serial id PK
         varchar username UK
-        varchar email UK
+        varchar employee_id UK "工号"
         varchar password_hash
-        varchar full_name
-        varchar role "admin, user, engineer"
-        varchar department
+        varchar role "admin, lab_engineer, research_engineer"
         boolean is_active
         timestamp created_at
         timestamp updated_at
@@ -484,7 +482,7 @@ Every table has a primary key index on the `id` column (auto-created by `SERIAL 
 | Table | Column | Purpose |
 |-------|--------|---------|
 | users | username | Enforce unique usernames for authentication |
-| users | email | Prevent duplicate email addresses |
+| users | employee_id | Prevent duplicate employee IDs (工号) |
 | igniter_types | type_code | Unique material codes |
 | nc_types | type_code | Unique material codes |
 | gp_types | type_code | Unique material codes |
@@ -517,7 +515,7 @@ Every table has a primary key index on the `id` column (auto-created by `SERIAL 
 ### Query Optimization Indexes (18)
 | Table | Index | Purpose |
 |-------|-------|---------|
-| users | role | Filter by user role (admin/user/engineer) |
+| users | role | Filter by user role (admin/lab_engineer/research_engineer) |
 | users | is_active | Filter active users |
 | work_orders | status | Filter by status (pending/in_progress/completed) |
 | work_orders | created_at DESC | Recent work orders |
@@ -769,7 +767,7 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 
 ---
 
-**Last Updated**: 2026-01-19
-**Database Version**: PostgreSQL 15
-**Schema Version**: 1.0
+**Last Updated**: 2026-02-07
+**Database Version**: PostgreSQL 15 (future target; current app uses SQLite)
+**Schema Version**: 1.1
 **Maintained By**: MGG Development Team

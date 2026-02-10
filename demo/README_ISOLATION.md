@@ -51,10 +51,10 @@ The demo currently uses two API endpoints:
 - `/simulation/load_test_data` - For loading test data
 
 **Important Notes:**
-1. These endpoints are marked as "no authentication required" for demo use
+1. These endpoints **require authentication** (`@login_required`) - user must be logged in
 2. They call standalone Python scripts in `demo/` folder
 3. They do NOT depend on main project business logic
-4. If main project authentication changes, demo endpoints remain accessible
+4. The main project uses three roles: admin, lab_engineer, research_engineer
 
 ## Development Guidelines
 

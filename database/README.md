@@ -36,7 +36,7 @@ This design balances performance, cost, and data retention requirements.
 ### Core Tables
 
 #### Users & Authentication
-- `users` - User accounts with RBAC (admin, user, engineer)
+- `users` - User accounts with RBAC (admin, lab_engineer, research_engineer)
 - `operation_logs` - Complete audit trail of all operations
 
 #### Configuration
@@ -44,11 +44,11 @@ This design balances performance, cost, and data retention requirements.
 - `nc_types1` - NC type 1 catalog with physical properties (NC类型1)
 - `nc_types2` - NC type 2 catalog with physical properties (NC类型2)
 - `gp_types` - GP type catalog with physical properties (GP类型)
-- `shell_types` - Shell type catalog (外壳型号)
+- `shell_types` - Shell height catalog (管壳高度 mm)
 - `current_types` - Current type catalog (电流)
-- `sensor_types` - Sensor type catalog (传感器型号)
-- `volume_types` - Volume type catalog (体积型号)
-- `test_devices` - Test device registry (设备)
+- `sensor_types` - Sensor range catalog (传感器量程)
+- `volume_types` - Volume catalog (容积)
+- `test_devices` - Test device registry (测试设备)
 
 #### Personnel & Tracking
 - `employees` - Employee registry (工号)
@@ -155,7 +155,7 @@ parquet_archive/
 - Foreign key columns for joins
 
 ### Query Optimization Indexes
-- `users.username`, `users.email` - Login queries
+- `users.username`, `users.employee_id` - Login queries
 - `work_orders.work_order_number` - Work order lookup
 - `*_simulations.created_at DESC` - Recent simulations
 - `operation_logs.created_at DESC` - Recent activity

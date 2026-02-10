@@ -52,9 +52,10 @@ class SimulationService:
                 sensor_model=params.get('sensor_model'),
                 body_model=params.get('body_model'),
                 equipment=params.get('equipment'),
-                test_operator=params.get('test_operator'),
+                employee_id=params.get('employee_id'),
                 test_name=params.get('test_name'),
-                notes=params.get('notes')
+                notes=params.get('notes'),
+                work_order=params.get('work_order')
             )
 
             # Run the simulation script

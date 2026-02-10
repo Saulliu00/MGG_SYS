@@ -224,6 +224,7 @@ ALTER USER mgg_user WITH PASSWORD 'new_secure_password';
 ```
 
 Update admin password after first login via the web interface.
+Note: The system uses three roles: `admin`, `lab_engineer`, `research_engineer`.
 
 ### 2. Enable SSL/TLS (Production)
 In `.env`:

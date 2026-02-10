@@ -31,7 +31,8 @@ Different endpoints have different timeout values based on their expected execut
 ### 3. Multi-User Access Configuration
 
 #### Session Management
-- **Session Timeout**: 1 hour (3600 seconds)
+- **Daily Login**: Sessions expire at midnight (local time), requiring daily re-login
+- **Session Timeout**: 1 hour (3600 seconds) for inactivity
 - **Permanent Session**: 24 hours (86400 seconds)
 - **Cookie Security**:
   - HTTPOnly: Enabled (prevents XSS attacks)
@@ -333,13 +334,25 @@ timeout = 60  # Increase from 30
 
 ## API Endpoints Summary
 
-| Endpoint | Method | Auth | Timeout | Description |
-|----------|--------|------|---------|-------------|
-| `/health` | GET | No | 5s | Health check |
-| `/auth/login` | GET/POST | No | 30s | User login |
-| `/simulation/run` | POST | Yes | 120s | Run simulation |
-| `/simulation/upload` | POST | Yes | 60s | Upload test data |
-| `/simulation/generate_comparison_chart` | POST | Yes | 30s | Generate chart |
+| Endpoint | Method | Auth | Role | Timeout | Description |
+|----------|--------|------|------|---------|-------------|
+| `/health` | GET | No | - | 5s | Health check |
+| `/auth/login` | GET/POST | No | - | 30s | User login (daily re-login required) |
+| `/simulation/` | GET | Yes | Admin/R&D | 30s | Forward simulation page |
+| `/simulation/reverse` | GET | Yes | Admin/R&D | 30s | Reverse simulation page |
+| `/simulation/run` | POST | Yes | All | 120s | Run simulation |
+| `/simulation/upload` | POST | Yes | All | 60s | Upload test data |
+| `/simulation/history` | GET | Yes | Admin/Lab | 30s | Experiment results page |
+| `/simulation/experiment` | POST | Yes | Admin/Lab | 60s | Batch file upload |
+| `/simulation/predict` | POST | Yes | All | 120s | Run prediction |
+| `/simulation/generate_comparison_chart` | POST | Yes | All | 30s | Generate chart |
+| `/admin/` | GET | Yes | Admin | 30s | User management |
+| `/admin/logs` | GET | Yes | Admin | 30s | System logs |
+
+### Role Types
+- **Admin**: Full access to all endpoints
+- **Lab** (实验工程师): Access to experiment results only
+- **R&D** (研发工程师): Access to forward/reverse simulation only
 
 ## Support and Updates
 
@@ -349,5 +362,6 @@ timeout = 60  # Increase from 30
 
 ## Version History
 
+- **v1.2** (2026-02-07): Three-role RBAC, daily login, experiment batch upload, security fixes
 - **v1.1** (2026-01-31): Added network configuration, logo generation, timeout middleware
 - **v1.0**: Initial release with basic functionality

@@ -11,7 +11,7 @@ bp = Blueprint('admin', __name__, url_prefix='/admin')
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated or not current_user.is_admin:
+        if not current_user.is_authenticated or current_user.role != 'admin':
             flash('需要管理员权限才能访问此页面', 'danger')
             return redirect(url_for('main.index'))
         return f(*args, **kwargs)
@@ -35,18 +35,18 @@ def users():
 @login_required
 @admin_required
 def add_user():
-    username = request.form.get('username')
-    email = request.form.get('email')
+    employee_id = request.form.get('employee_id')
+    username = request.form.get('username', '').strip() or None
     password = request.form.get('password')
-    is_admin = request.form.get('is_admin') == 'on'
+    role = request.form.get('role', 'research_engineer')
 
-    if User.query.filter_by(username=username).first():
-        return jsonify({'success': False, 'message': '用户名已存在'})
+    if role not in ('admin', 'lab_engineer', 'research_engineer'):
+        return jsonify({'success': False, 'message': '无效的角色'})
 
-    if User.query.filter_by(email=email).first():
-        return jsonify({'success': False, 'message': '邮箱已被注册'})
+    if User.query.filter_by(employee_id=employee_id).first():
+        return jsonify({'success': False, 'message': '工号已被注册'})
 
-    new_user = User(username=username, email=email, is_admin=is_admin)
+    new_user = User(employee_id=employee_id, username=username, role=role)
     new_user.set_password(password)
     db.session.add(new_user)
     db.session.commit()
@@ -120,7 +120,9 @@ def logs():
 @admin_required
 def view_log():
     """View specific log file contents"""
-    filename = request.args.get('filename')
+    from werkzeug.utils import secure_filename as sanitize
+    raw_filename = request.args.get('filename')
+    filename = sanitize(raw_filename) if raw_filename else None
     max_rows = int(request.args.get('max_rows', ADMIN_LOG_VIEW.get('max_rows_display', 1000)))
 
     # Read log entries
@@ -146,15 +148,21 @@ def download_log(filename):
         return redirect(url_for('admin.logs'))
 
     import os
+    from werkzeug.utils import secure_filename as sanitize
     from app.config.logging_config import LOG_DIR
 
-    filepath = os.path.join(LOG_DIR, filename)
+    safe_filename = sanitize(filename)
+    if not safe_filename:
+        flash('无效的文件名', 'danger')
+        return redirect(url_for('admin.logs'))
+
+    filepath = os.path.join(LOG_DIR, safe_filename)
 
     if not os.path.exists(filepath):
         flash('日志文件不存在', 'danger')
         return redirect(url_for('admin.logs'))
 
-    return send_file(filepath, as_attachment=True, download_name=filename)
+    return send_file(filepath, as_attachment=True, download_name=safe_filename)
 
 @bp.route('/logs/statistics')
 @login_required

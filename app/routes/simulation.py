@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, request, jsonify, current_app
+from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for
 from flask_login import login_required, current_user
+from functools import wraps
 from app.utils.errors import (
     FileValidationError,
     SimulationError,
@@ -11,13 +12,33 @@ from app.middleware import log_simulation_run, log_file_upload
 
 bp = Blueprint('simulation', __name__, url_prefix='/simulation')
 
+def research_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if current_user.role not in ('admin', 'research_engineer'):
+            flash('您没有权限访问此页面', 'danger')
+            return redirect(url_for('main.index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def lab_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if current_user.role not in ('admin', 'lab_engineer'):
+            flash('您没有权限访问此页面', 'danger')
+            return redirect(url_for('main.index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 @bp.route('/')
 @login_required
+@research_required
 def index():
     return render_template('simulation/index.html')
 
 @bp.route('/reverse')
 @login_required
+@research_required
 def reverse():
     """Reverse simulation page"""
     return render_template('simulation/reverse.html')
@@ -139,14 +160,59 @@ def upload_test_result():
 
 @bp.route('/history')
 @login_required
+@lab_required
 def history():
     """View simulation history"""
     simulations = current_app.simulation_service.get_simulation_history(current_user.id)
     return render_template('simulation/history.html', simulations=simulations)
 
+@bp.route('/experiment', methods=['POST'])
+@login_required
+@lab_required
+def experiment():
+    """Submit experiment data with batch file upload"""
+    import os
+    try:
+        employee_id = request.form.get('employee_id', '')
+        test_name = request.form.get('test_name', '')
+        equipment = request.form.get('equipment', '')
+        test_date = request.form.get('test_date', '')
+        test_time = request.form.get('test_time', '')
+        ticket_number = request.form.get('ticket_number', '')
+
+        files = request.files.getlist('files')
+        if not files or all(f.filename == '' for f in files):
+            return jsonify({'success': False, 'message': '请至少上传一个文件'})
+
+        upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'experiments')
+        os.makedirs(upload_folder, exist_ok=True)
+
+        saved_files = []
+        for file in files:
+            if file.filename == '':
+                continue
+            from werkzeug.utils import secure_filename
+            filename = secure_filename(file.filename)
+            # Prefix with ticket number if available
+            if ticket_number:
+                filename = f"{ticket_number}_{filename}"
+            filepath = os.path.join(upload_folder, filename)
+            file.save(filepath)
+            saved_files.append(filename)
+
+        return jsonify({
+            'success': True,
+            'message': f'成功上传 {len(saved_files)} 个文件',
+            'files': saved_files
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'提交失败: {str(e)}'})
+
 @bp.route('/predict', methods=['POST'])
+@login_required
 def predict():
-    """Run prediction for demo (no authentication required)"""
+    """Run prediction"""
     try:
         data = request.get_json()
         nc_usage_1 = float(data.get('nc_usage_1', 0))
@@ -173,8 +239,9 @@ def predict():
         }), 500
 
 @bp.route('/save_to_data_folder', methods=['POST'])
+@login_required
 def save_to_data_folder():
-    """Save uploaded .xlsx file to demo/data folder with NC value naming (no authentication required)"""
+    """Save uploaded .xlsx file to demo/data folder with NC value naming"""
     try:
         if 'file' not in request.files:
             return jsonify({
@@ -203,8 +270,9 @@ def save_to_data_folder():
 
 
 @bp.route('/load_test_data', methods=['POST'])
+@login_required
 def load_test_data():
-    """Load test data from uploaded .xlsx file for comparison (no authentication required)"""
+    """Load test data from uploaded .xlsx file for comparison"""
     try:
         if 'file' not in request.files:
             return jsonify({

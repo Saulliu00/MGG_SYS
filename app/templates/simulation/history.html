@@ -1,71 +1,198 @@
 {% extends "base.html" %}
 
-{% block title %}历史记录 - MGG仿真系统{% endblock %}
+{% block title %}实验结果 - MGG仿真系统{% endblock %}
 
 {% block content %}
-<div class="admin-container">
-    <div class="admin-header">
-        <h2><i class="fas fa-history"></i> 仿真历史记录</h2>
-        <p style="color: #7f8c8d; margin-top: 0.5rem;">查看您的所有仿真计算记录</p>
-    </div>
+<div class="main-container">
+    <div class="simulation-container" style="grid-template-columns: 1fr 1fr;">
+        <!-- Left Panel - Input Parameters -->
+        <div class="panel parameters-panel">
+            <div class="panel-title">实验信息</div>
 
-    <div class="admin-table">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>测试名称</th>
-                    <th>操作员</th>
-                    <th>点火具型号</th>
-                    <th>外壳型号</th>
-                    <th>电流</th>
-                    <th>创建时间</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% if simulations %}
-                    {% for sim in simulations %}
-                    <tr>
-                        <td>{{ sim.id }}</td>
-                        <td>{{ sim.test_name or '未命名' }}</td>
-                        <td>{{ sim.test_operator or '-' }}</td>
-                        <td>{{ sim.ignition_model }}</td>
-                        <td>{{ sim.shell_model }}</td>
-                        <td>{{ sim.current }}</td>
-                        <td>{{ sim.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="viewSimulation({{ sim.id }})">
-                                <i class="fas fa-eye"></i> 查看
-                            </button>
-                            <button class="btn btn-sm btn-secondary" onclick="downloadSimulation({{ sim.id }})">
-                                <i class="fas fa-download"></i> 导出
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                {% else %}
-                    <tr>
-                        <td colspan="8" style="text-align: center; padding: 2rem; color: #7f8c8d;">
-                            <i class="fas fa-inbox fa-3x" style="display: block; margin-bottom: 1rem;"></i>
-                            暂无仿真记录
-                        </td>
-                    </tr>
-                {% endif %}
-            </tbody>
-        </table>
+            <form id="experimentForm">
+                <div class="form-group">
+                    <label>工号:</label>
+                    <input type="text" name="employee_id" class="form-control" placeholder="输入工号">
+                </div>
+
+                <div class="form-group">
+                    <label>测试名称 (选填):</label>
+                    <input type="text" name="test_name" class="form-control" placeholder="输入测试名称">
+                </div>
+
+                <div class="form-group">
+                    <label>测试设备:</label>
+                    <select name="equipment" class="form-control">
+                        <option value="">请选择...</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>日期:</label>
+                    <input type="date" name="test_date" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label>时间:</label>
+                    <input type="time" name="test_time" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label>工单号:</label>
+                    <input type="text" name="ticket_number" class="form-control" placeholder="输入工单号">
+                </div>
+            </form>
+        </div>
+
+        <!-- Right Panel - Batch File Upload -->
+        <div class="panel results-panel">
+            <div class="panel-title">批量上传文件</div>
+
+            <!-- Hidden file input (multiple) -->
+            <input type="file" id="batchFileInput" accept=".xlsx,.csv,.xls" multiple style="display: none;">
+
+            <div class="upload-section" id="dropZone" onclick="document.getElementById('batchFileInput').click()" style="min-height: 120px;">
+                <i class="fas fa-cloud-upload-alt fa-2x" style="color: #667eea;"></i>
+                <p style="margin-top: 0.5rem; font-weight: bold; margin-bottom: 0.25rem;">点击或拖拽上传实验数据文件</p>
+                <p style="font-size: 0.82rem; color: #7f8c8d; margin-bottom: 0.25rem;">支持 .xlsx / .csv / .xls 格式，可多选</p>
+            </div>
+
+            <!-- File list -->
+            <div id="fileList" style="margin-top: 1rem;"></div>
+
+            <!-- Upload button -->
+            <div style="text-align: center; margin-top: 1rem;">
+                <button type="button" class="btn btn-primary" style="width: 80%; padding: 0.65rem; font-size: 0.95rem;" onclick="submitExperiment()">
+                    <i class="fas fa-upload"></i> 提交
+                </button>
+            </div>
+
+            <!-- Upload status -->
+            <div id="uploadStatus" style="margin-top: 1rem; display: none;"></div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function viewSimulation(id) {
-    alert('查看仿真 #' + id + ' 的详细信息（功能待实现）');
-}
+    let selectedFiles = [];
 
-function downloadSimulation(id) {
-    alert('导出仿真 #' + id + ' 的数据（功能待实现）');
-}
+    // Handle file selection
+    document.getElementById('batchFileInput').addEventListener('change', function(event) {
+        const files = Array.from(event.target.files);
+        files.forEach(file => {
+            const validExts = ['.xlsx', '.csv', '.xls'];
+            const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            if (validExts.includes(ext)) {
+                selectedFiles.push(file);
+            } else {
+                alert('不支持的文件格式: ' + file.name);
+            }
+        });
+        renderFileList();
+    });
+
+    // Drag and drop support
+    const dropZone = document.getElementById('dropZone');
+
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = '#667eea';
+        dropZone.style.background = '#f0f2ff';
+    });
+
+    dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = '';
+        dropZone.style.background = '';
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.style.borderColor = '';
+        dropZone.style.background = '';
+        const files = Array.from(e.dataTransfer.files);
+        files.forEach(file => {
+            const validExts = ['.xlsx', '.csv', '.xls'];
+            const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            if (validExts.includes(ext)) {
+                selectedFiles.push(file);
+            } else {
+                alert('不支持的文件格式: ' + file.name);
+            }
+        });
+        renderFileList();
+    });
+
+    // Render file list
+    function renderFileList() {
+        const fileListDiv = document.getElementById('fileList');
+        if (selectedFiles.length === 0) {
+            fileListDiv.innerHTML = '';
+            return;
+        }
+
+        let html = '<div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px;">';
+        html += '<h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.85rem;"><i class="fas fa-file-alt"></i> 已选文件 (' + selectedFiles.length + ')</h6>';
+
+        selectedFiles.forEach((file, index) => {
+            const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+            html += '<div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.5rem; background: white; border-radius: 4px; margin-bottom: 0.3rem; font-size: 0.82rem;">';
+            html += '<span><i class="fas fa-file-excel" style="color: #27ae60; margin-right: 0.3rem;"></i>' + file.name + ' <span style="color: #95a5a6;">(' + sizeMB + ' MB)</span></span>';
+            html += '<button type="button" onclick="removeFile(' + index + ')" style="background: none; border: none; color: #e74c3c; cursor: pointer; font-size: 0.9rem;"><i class="fas fa-times"></i></button>';
+            html += '</div>';
+        });
+
+        html += '</div>';
+        fileListDiv.innerHTML = html;
+    }
+
+    // Remove file from list
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        renderFileList();
+    }
+
+    // Submit experiment
+    function submitExperiment() {
+        const form = document.getElementById('experimentForm');
+        const formData = new FormData(form);
+
+        if (selectedFiles.length === 0) {
+            alert('请至少上传一个文件');
+            return;
+        }
+
+        selectedFiles.forEach((file, index) => {
+            formData.append('files', file);
+        });
+
+        const statusDiv = document.getElementById('uploadStatus');
+        statusDiv.style.display = 'block';
+        statusDiv.innerHTML = '<div style="text-align: center; padding: 1rem; color: #667eea;"><i class="fas fa-spinner fa-spin fa-2x"></i><p style="margin-top: 0.5rem;">正在提交...</p></div>';
+
+        fetch('/simulation/experiment', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                statusDiv.innerHTML = '<div style="text-align: center; padding: 1rem; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #27ae60;"><i class="fas fa-check-circle fa-2x" style="color: #27ae60;"></i><p style="margin-top: 0.5rem; color: #27ae60; font-weight: bold;">提交成功</p></div>';
+                selectedFiles = [];
+                renderFileList();
+            } else {
+                statusDiv.innerHTML = '<div style="text-align: center; padding: 1rem; background: #fde8e8; border-radius: 6px; border-left: 4px solid #e74c3c;"><i class="fas fa-exclamation-circle fa-2x" style="color: #e74c3c;"></i><p style="margin-top: 0.5rem; color: #e74c3c; font-weight: bold;">提交失败: ' + (data.message || '未知错误') + '</p></div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            statusDiv.innerHTML = '<div style="text-align: center; padding: 1rem; background: #fde8e8; border-radius: 6px; border-left: 4px solid #e74c3c;"><i class="fas fa-exclamation-circle fa-2x" style="color: #e74c3c;"></i><p style="margin-top: 0.5rem; color: #e74c3c; font-weight: bold;">提交失败</p></div>';
+        });
+    }
 </script>
 {% endblock %}

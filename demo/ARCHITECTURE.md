@@ -67,13 +67,13 @@ The demo optionally uses two Flask API endpoints:
 
 ### /simulation/predict
 - Located in: `app/routes/simulation.py`
-- Marked as: "no authentication required"
+- **Requires authentication** (`@login_required`)
 - Purpose: Executes `run_simulation.py` via subprocess
 - **Isolation**: Calls standalone script, no business logic dependency
 
 ### /simulation/load_test_data
 - Located in: `app/routes/simulation.py`
-- Marked as: "no authentication required"
+- **Requires authentication** (`@login_required`)
 - Purpose: Executes `load_test_data.py` via subprocess
 - **Isolation**: Calls standalone script, no business logic dependency
 
@@ -81,9 +81,9 @@ The demo optionally uses two Flask API endpoints:
 
 1. **No Code Sharing**: Demo scripts don't import from `app/`, `models/`, or any main project modules
 2. **No Database Access**: Demo doesn't use SQLAlchemy or main project database
-3. **No Authentication Dependency**: Demo endpoints bypass main project auth
+3. **Authentication Required**: Demo API endpoints now require login (user must be authenticated)
 4. **Separate Data**: Demo uses `demo/data/` for files, not main project storage
-5. **Independent Operation**: Demo can run even if main project is broken
+5. **Independent Operation**: Demo scripts can run standalone even if main project is broken
 
 ## Data Flow
 
@@ -140,7 +140,7 @@ User uploads .xlsx file
 1. ✅ Demo should NOT be affected
 2. ✅ If changing API structure, update demo endpoints separately
 3. ✅ Test that demo still works after main project changes
-4. ✅ Keep demo endpoints marked "no authentication required"
+4. ✅ Demo API endpoints require login (user must be authenticated first)
 
 ## Version Independence
 

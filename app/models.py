@@ -8,16 +8,29 @@ def load_user(user_id):
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(80))
+    employee_id = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
+    phone = db.Column(db.String(20))
+    role = db.Column(db.String(20), nullable=False, default='research_engineer')
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
     simulations = db.relationship('Simulation', backref='user', lazy=True)
     test_results = db.relationship('TestResult', backref='user', lazy=True)
+
+    @property
+    def is_admin(self):
+        return self.role == 'admin'
+
+    @property
+    def is_lab_engineer(self):
+        return self.role == 'lab_engineer'
+
+    @property
+    def is_research_engineer(self):
+        return self.role == 'research_engineer'
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -41,16 +54,17 @@ class Simulation(db.Model):
     nc_usage_2 = db.Column(db.Float)  # NC用量2 (毫克)
     gp_type = db.Column(db.String(50))  # GP类型
     gp_usage = db.Column(db.Float)  # GP用量 (毫克)
-    shell_model = db.Column(db.String(50))  # 外壳型号
+    shell_model = db.Column(db.String(50))  # 管壳高度 (mm)
     current = db.Column(db.Float)  # 电流
-    sensor_model = db.Column(db.String(50))  # 传感器型号
-    body_model = db.Column(db.String(50))  # 体积型号
-    equipment = db.Column(db.String(50))  # 设备
+    sensor_model = db.Column(db.String(50))  # 传感器量程
+    body_model = db.Column(db.String(50))  # 容积
+    equipment = db.Column(db.String(50))  # 测试设备
 
     # Test metadata
-    test_operator = db.Column(db.String(100))  # 测试操作员
+    employee_id = db.Column(db.String(100))  # 工号
     test_name = db.Column(db.String(200))  # 测试名称
     notes = db.Column(db.Text)  # 备注
+    work_order = db.Column(db.String(50))  # 工单号
 
     # Results
     result_data = db.Column(db.Text)  # JSON formatted simulation results

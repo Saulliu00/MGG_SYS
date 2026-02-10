@@ -40,9 +40,13 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user"></i> {{ current_user.username }}
+                            <i class="fas fa-user"></i> {{ current_user.employee_id }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('auth.settings') }}">
+                                <i class="fas fa-cog"></i> 设置
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
                                 <i class="fas fa-sign-out-alt"></i> 退出登录
                             </a></li>
@@ -64,19 +68,23 @@
                     <i class="fas fa-chevron-right menu-arrow"></i>
                 </div>
                 <div id="mgg-menu" class="menu-level-2">
+                    {% if current_user.role == 'admin' or current_user.role == 'research_engineer' %}
                     <a href="{{ url_for('simulation.index') }}" class="menu-level-2-item">
                         <i class="fas fa-arrow-right"></i> 正向
                     </a>
                     <a href="{{ url_for('simulation.reverse') }}" class="menu-level-2-item">
                         <i class="fas fa-arrow-left"></i> 逆向
                     </a>
+                    {% endif %}
+                    {% if current_user.role == 'admin' or current_user.role == 'lab_engineer' %}
                     <a href="{{ url_for('simulation.history') }}" class="menu-level-2-item">
                         <i class="fas fa-clipboard-check"></i> 实验结果
                     </a>
+                    {% endif %}
                 </div>
             </div>
 
-            {% if current_user.is_admin %}
+            {% if current_user.role == 'admin' %}
             <!-- Access Control Menu -->
             <div class="menu-item">
                 <div class="menu-level-1" onclick="toggleMenu('access-menu', this)">
