@@ -17,7 +17,9 @@ def research_required(f):
     def decorated_function(*args, **kwargs):
         if current_user.role not in ('admin', 'research_engineer'):
             flash('您没有权限访问此页面', 'danger')
-            return redirect(url_for('main.index'))
+            if current_user.role == 'lab_engineer':
+                return redirect(url_for('simulation.history'))
+            return redirect(url_for('auth.login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -26,7 +28,9 @@ def lab_required(f):
     def decorated_function(*args, **kwargs):
         if current_user.role not in ('admin', 'lab_engineer'):
             flash('您没有权限访问此页面', 'danger')
-            return redirect(url_for('main.index'))
+            if current_user.role == 'research_engineer':
+                return redirect(url_for('simulation.index'))
+            return redirect(url_for('auth.login'))
         return f(*args, **kwargs)
     return decorated_function
 

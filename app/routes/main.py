@@ -6,10 +6,13 @@ bp = Blueprint('main', __name__)
 
 @bp.route('/')
 def index():
-    # Redirect to login if not authenticated, otherwise to simulation page
+    # Redirect to login if not authenticated, otherwise to role-appropriate page
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login'))
-    return redirect(url_for('simulation.index'))
+    if current_user.role in ('admin', 'research_engineer'):
+        return redirect(url_for('simulation.index'))
+    else:
+        return redirect(url_for('simulation.history'))
 
 @bp.route('/health')
 def health_check():

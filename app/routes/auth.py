@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app
 from flask_login import login_user, logout_user, current_user, login_required
 from urllib.parse import urlparse
 from app import db
@@ -24,7 +24,13 @@ def check_daily_login():
         if login_date != today:
             logout_user()
             flash('新的一天，请重新登录', 'info')
-            return redirect(url_for('auth.login'))
+            resp = redirect(url_for('auth.login'))
+            # Explicitly delete remember cookie to prevent redirect loop
+            resp.delete_cookie(
+                current_app.config.get('REMEMBER_COOKIE_NAME', 'remember_token'),
+                path=current_app.config.get('REMEMBER_COOKIE_PATH', '/')
+            )
+            return resp
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -38,7 +44,8 @@ def login():
         user = User.query.filter_by(employee_id=employee_id).first()
 
         if user and user.check_password(password) and user.is_active:
-            login_user(user, remember=True)
+            login_user(user)
+            session.permanent = True
             session['login_date'] = date.today().isoformat()
             # Log successful login
             log_user_login(
@@ -51,7 +58,12 @@ def login():
             # Prevent open redirect: only allow relative URLs
             if next_page and urlparse(next_page).netloc:
                 next_page = None
-            return redirect(next_page if next_page else url_for('simulation.index'))
+            if not next_page:
+                if user.role in ('admin', 'research_engineer'):
+                    next_page = url_for('simulation.index')
+                else:
+                    next_page = url_for('simulation.history')
+            return redirect(next_page)
         else:
             # Log failed login attempt
             log_user_login(
@@ -74,7 +86,13 @@ def logout():
             ip_address=request.remote_addr
         )
     logout_user()
-    return redirect(url_for('auth.login'))
+    resp = redirect(url_for('auth.login'))
+    # Explicitly clear remember cookie to prevent redirect loops
+    resp.delete_cookie(
+        current_app.config.get('REMEMBER_COOKIE_NAME', 'remember_token'),
+        path=current_app.config.get('REMEMBER_COOKIE_PATH', '/')
+    )
+    return resp
 
 @bp.route('/register', methods=['GET', 'POST'])
 def register():
