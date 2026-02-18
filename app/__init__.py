@@ -1,7 +1,4 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 import os
 from app.config.network_config import (
@@ -13,10 +10,7 @@ from app.config.network_config import (
 )
 from app.utils import LogoGenerator
 from app.middleware import init_timeout_middleware, init_logging_middleware
-
-db = SQLAlchemy()
-login_manager = LoginManager()
-bcrypt = Bcrypt()
+from database import db, login_manager, bcrypt, init_database
 
 def create_app():
     app = Flask(__name__, instance_relative_config=True)
@@ -94,20 +88,7 @@ def create_app():
     app.register_blueprint(admin.bp)
     app.register_blueprint(simulation.bp)
 
-    # Create database tables
-    with app.app_context():
-        db.create_all()
-        # Create default admin user if not exists
-        from app.models import User
-        admin_user = User.query.filter_by(employee_id='admin').first()
-        if not admin_user:
-            admin_user = User(
-                username='admin',
-                employee_id='admin',
-                role='admin'
-            )
-            admin_user.set_password('admin123')
-            db.session.add(admin_user)
-            db.session.commit()
+    # Create database tables, run migrations, and seed data
+    init_database(app)
 
     return app

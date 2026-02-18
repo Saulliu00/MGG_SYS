@@ -1,8 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app
 from flask_login import login_user, logout_user, current_user, login_required
 from urllib.parse import urlparse
-from app import db
-from app.models import User
+from database import db, User
 from app.middleware import log_user_login, log_user_logout
 from app.utils import log_manager
 from datetime import date

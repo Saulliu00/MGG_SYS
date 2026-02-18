@@ -1,7 +1,8 @@
 """Simulation service for handling simulation business logic"""
 import json
+from datetime import date
 from typing import Dict, List
-from app.models import Simulation
+from database import Simulation, Recipe, WorkOrder
 from app.utils.subprocess_runner import SubprocessRunner
 from app.utils.errors import SimulationError, SubprocessError, SubprocessTimeoutError
 
@@ -36,6 +37,46 @@ class SimulationService:
         try:
             # Extract NC usage value
             nc_usage_1 = float(params.get('nc_usage_1', 0))
+            work_order_number = params.get('work_order', '').strip()
+
+            # Create recipe (snapshot of all test conditions)
+            recipe = Recipe(
+                user_id=user_id,
+                ignition_model=params.get('ignition_model'),
+                nc_type_1=params.get('nc_type_1'),
+                nc_usage_1=nc_usage_1,
+                nc_type_2=params.get('nc_type_2'),
+                nc_usage_2=float(params.get('nc_usage_2', 0)),
+                gp_type=params.get('gp_type'),
+                gp_usage=float(params.get('gp_usage', 0)),
+                shell_model=params.get('shell_model'),
+                current_condition=params.get('current'),
+                sensor_range=params.get('sensor_model'),
+                body_model=params.get('body_model'),
+                equipment=params.get('equipment'),
+            )
+            self.db.session.add(recipe)
+            self.db.session.flush()
+
+            # Create or find work order
+            work_order_obj = None
+            if work_order_number:
+                work_order_obj = WorkOrder.query.filter_by(
+                    work_order_number=work_order_number
+                ).first()
+                if not work_order_obj:
+                    work_order_obj = WorkOrder(
+                        work_order_number=work_order_number,
+                        recipe_id=recipe.id,
+                        user_id=user_id,
+                        employee_id=params.get('employee_id'),
+                        test_name=params.get('test_name'),
+                        notes=params.get('notes'),
+                        test_date=date.today(),
+                        source='simulation',
+                    )
+                    self.db.session.add(work_order_obj)
+                    self.db.session.flush()
 
             # Create new simulation record
             simulation = Simulation(
@@ -55,7 +96,8 @@ class SimulationService:
                 employee_id=params.get('employee_id'),
                 test_name=params.get('test_name'),
                 notes=params.get('notes'),
-                work_order=params.get('work_order')
+                work_order=work_order_number,
+                work_order_id=work_order_obj.id if work_order_obj else None,
             )
 
             # Run the simulation script

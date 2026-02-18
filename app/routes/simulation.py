@@ -176,18 +176,66 @@ def history():
 def experiment():
     """Submit experiment data with batch file upload"""
     import os
+    import uuid
+    from datetime import datetime
+    from werkzeug.utils import secure_filename
+    from database import db, Recipe, WorkOrder, ExperimentFile
+
     try:
-        employee_id = request.form.get('employee_id', '')
-        test_name = request.form.get('test_name', '')
-        equipment = request.form.get('equipment', '')
-        test_date = request.form.get('test_date', '')
-        test_time = request.form.get('test_time', '')
-        ticket_number = request.form.get('ticket_number', '')
+        ticket_number = request.form.get('ticket_number', '').strip()
+        if not ticket_number:
+            return jsonify({'success': False, 'message': '请输入工单号'})
 
         files = request.files.getlist('files')
         if not files or all(f.filename == '' for f in files):
             return jsonify({'success': False, 'message': '请至少上传一个文件'})
 
+        employee_id = request.form.get('employee_id', '').strip()
+        test_name = request.form.get('test_name', '').strip()
+        equipment = request.form.get('equipment', '').strip()
+        test_date_str = request.form.get('test_date', '').strip()
+        test_time_val = request.form.get('test_time', '').strip()
+
+        # Parse test_date
+        test_date = None
+        if test_date_str:
+            try:
+                test_date = datetime.strptime(test_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        # Find existing work order or create new one
+        work_order = WorkOrder.query.filter_by(work_order_number=ticket_number).first()
+
+        if not work_order:
+            # Create a recipe with whatever info the lab engineer provides
+            recipe = Recipe(
+                user_id=current_user.id,
+                equipment=equipment or None,
+            )
+            db.session.add(recipe)
+            db.session.flush()
+
+            work_order = WorkOrder(
+                work_order_number=ticket_number,
+                recipe_id=recipe.id,
+                user_id=current_user.id,
+                employee_id=employee_id or None,
+                test_name=test_name or None,
+                test_date=test_date,
+                test_time=test_time_val or None,
+                source='experiment',
+            )
+            db.session.add(work_order)
+            db.session.flush()
+        else:
+            # Update metadata on existing work order if provided
+            if test_date and not work_order.test_date:
+                work_order.test_date = test_date
+            if test_time_val and not work_order.test_time:
+                work_order.test_time = test_time_val
+
+        # Save files
         upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'experiments')
         os.makedirs(upload_folder, exist_ok=True)
 
@@ -195,22 +243,34 @@ def experiment():
         for file in files:
             if file.filename == '':
                 continue
-            from werkzeug.utils import secure_filename
-            filename = secure_filename(file.filename)
-            # Prefix with ticket number if available
-            if ticket_number:
-                filename = f"{ticket_number}_{filename}"
-            filepath = os.path.join(upload_folder, filename)
+            original_name = secure_filename(file.filename)
+            stored_name = f"{uuid.uuid4().hex}_{original_name}"
+            filepath = os.path.join(upload_folder, stored_name)
             file.save(filepath)
-            saved_files.append(filename)
+            file_size = os.path.getsize(filepath)
+
+            exp_file = ExperimentFile(
+                work_order_id=work_order.id,
+                user_id=current_user.id,
+                original_filename=original_name,
+                stored_filename=stored_name,
+                file_path=filepath,
+                file_size=file_size,
+            )
+            db.session.add(exp_file)
+            saved_files.append(original_name)
+
+        db.session.commit()
 
         return jsonify({
             'success': True,
             'message': f'成功上传 {len(saved_files)} 个文件',
+            'work_order_id': work_order.id,
             'files': saved_files
         })
 
     except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'message': f'提交失败: {str(e)}'})
 
 @bp.route('/predict', methods=['POST'])

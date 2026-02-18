@@ -2,304 +2,195 @@
 
 ## Overview
 
-The MGG Simulation System uses a **Hot-Cold Architecture**:
-- **Hot Storage**: PostgreSQL for active data and real-time queries
-- **Cold Storage**: Parquet files for archived historical data
-
-This design balances performance, cost, and data retention requirements.
-
-## Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                         │
-│                  (Flask + SQLAlchemy)                        │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ├──────────────┬──────────────────────────┐
-                     │              │                          │
-            ┌────────▼────────┐  ┌──▼──────────────┐  ┌──────▼────────┐
-            │  PostgreSQL     │  │  Archive        │  │  File         │
-            │  (Hot Data)     │  │  Service        │  │  Storage      │
-            │  90-365 days    │  │                 │  │  (.xlsx)      │
-            └────────┬────────┘  └──┬──────────────┘  └───────────────┘
-                     │              │
-                     │         ┌────▼────────────────┐
-                     │         │  Parquet Archive    │
-                     └────────►│  (Cold Data)        │
-                               │  > 365 days         │
-                               └─────────────────────┘
-```
+The MGG Simulation System uses **Flask-SQLAlchemy with SQLite** for data storage. The database tracks users, test recipes (parameter combinations), work orders (工单), uploaded experiment files, and simulation results.
 
 ## Database Schema
 
-### Core Tables
-
-#### Users & Authentication
-- `users` - User accounts with RBAC (admin, lab_engineer, research_engineer)
-- `operation_logs` - Complete audit trail of all operations
-
-#### Configuration
-- `igniter_types` - Igniter type catalog (点火具型号)
-- `nc_types1` - NC type 1 catalog with physical properties (NC类型1)
-- `nc_types2` - NC type 2 catalog with physical properties (NC类型2)
-- `gp_types` - GP type catalog with physical properties (GP类型)
-- `shell_types` - Shell height catalog (管壳高度 mm)
-- `current_types` - Current type catalog (电流)
-- `sensor_types` - Sensor range catalog (传感器量程)
-- `volume_types` - Volume catalog (容积)
-- `test_devices` - Test device registry (测试设备)
-
-#### Personnel & Tracking
-- `employees` - Employee registry (工号)
-- `tickets` - Ticket system for work order tracking (工单系统)
-
-#### Work Management
-- `work_orders` - Work orders linking simulations and tests
-
-#### Simulations
-- `forward_simulations` - Forward simulation metadata (正向仿真)
-- `simulation_time_series` - PT curve data from simulations
-- `reverse_simulations` - Reverse simulation metadata (逆向仿真)
-
-#### Test Results
-- `test_results` - Test result metadata (实验结果)
-- `test_result_files` - Uploaded test files (.xlsx)
-- `test_time_series` - PT curve data from tests
-
-#### Analysis
-- `pt_comparisons` - Comparison between simulation and test data
-
-#### Archive Management
-- `archive_batches` - Tracking for archived Parquet files
-- `retention_policies` - Data retention configuration
-- `model_versions` - ML model version tracking
-
-## Data Flow
-
-### 1. Forward Simulation (正向仿真)
-```
-User Input (NC, GP, etc.)
-    ↓
-forward_simulations (metadata)
-    ↓
-simulation_time_series (PT curve)
-    ↓
-[After 180 days] → Parquet Archive
-```
-
-### 2. Test Results (实验结果)
-```
-Upload .xlsx files
-    ↓
-test_results (metadata)
-    ↓
-test_result_files (file info)
-    ↓
-test_time_series (parsed PT curve)
-    ↓
-[After 365 days] → Parquet Archive
-```
-
-### 3. PT Curve Comparison (PT曲线对比)
-```
-Select Simulation + Test Data
-    ↓
-pt_comparisons (metrics: RMSE, correlation, etc.)
-```
-
-## Data Retention Strategy
-
-| Table | Hot Retention | Archive | Delete After Archive |
-|-------|--------------|---------|---------------------|
-| operation_logs | 90 days | Yes | Yes |
-| simulation_time_series | 180 days | Yes | Yes |
-| test_time_series | 365 days | Yes | Yes |
-| forward_simulations | 365 days | No | No (keep metadata) |
-| reverse_simulations | 365 days | No | No (keep metadata) |
-| test_results | 730 days | No | No (keep metadata) |
-
-**Strategy**:
-- Time series data (bulk) → Archive to Parquet and delete
-- Metadata (lightweight) → Keep in PostgreSQL for queries
-- Operation logs → Archive after 90 days for compliance
-
-## Parquet Archive Structure
+### 6 Tables
 
 ```
-parquet_archive/
-├── simulation_time_series/
-│   ├── 2024-Q1.parquet
-│   ├── 2024-Q2.parquet
-│   └── 2024-Q3.parquet
-├── test_time_series/
-│   ├── 2024-Q1.parquet
-│   ├── 2024-Q2.parquet
-│   └── 2024-Q3.parquet
-└── operation_logs/
-    ├── 2024-01.parquet
-    ├── 2024-02.parquet
-    └── 2024-03.parquet
+┌──────────┐     ┌──────────┐     ┌──────────────┐     ┌─────────────────┐
+│   user   │────►│  recipe   │────►│  work_order  │────►│ experiment_file │
+│          │     │           │     │              │     │  (multiple per  │
+│ login &  │     │ full set  │     │ 工单: links  │     │   work order)   │
+│ roles    │     │ of test   │     │ recipe +     │     └─────────────────┘
+│          │     │ conditions│     │ files +      │
+│          │     └───────────┘     │ metadata     │────►┌──────────────┐
+│          │                       │              │     │  simulation  │
+│          │──────────────────────►│              │     │  (PT curve   │
+│          │                       └──────────────┘     │   results)   │
+│          │                                            └──────────────┘
+│          │──────────────────────────────────────────►┌──────────────┐
+│          │                                           │ test_result  │
+│          │                                           │ (PT compare) │
+└──────────┘                                           └──────────────┘
 ```
 
-**Parquet Benefits**:
-- **Compression**: 5-10x smaller than raw data
-- **Columnar**: Fast analytics queries
-- **Portable**: Can be read by pandas, Spark, DuckDB
-- **Cost-effective**: Cheap storage for historical data
+---
 
-## Indexes Strategy
+### Table 1: `user`
 
-### Primary Indexes
-- All `id` columns (primary keys)
-- Foreign key columns for joins
+User accounts with role-based access control.
 
-### Query Optimization Indexes
-- `users.username`, `users.employee_id` - Login queries
-- `work_orders.work_order_number` - Work order lookup
-- `*_simulations.created_at DESC` - Recent simulations
-- `operation_logs.created_at DESC` - Recent activity
-- Composite: `operation_logs(user_id, log_type)` - User activity by type
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER PK | |
+| username | VARCHAR(80) | Display name |
+| employee_id | VARCHAR(120) UNIQUE NOT NULL | Login identifier (工号) |
+| password_hash | VARCHAR(128) NOT NULL | Bcrypt hash |
+| phone | VARCHAR(20) | |
+| role | VARCHAR(20) NOT NULL | `admin`, `research_engineer`, `lab_engineer` |
+| is_active | BOOLEAN | Account enabled/disabled |
+| created_at | DATETIME | |
 
-### Time Series Indexes
-- `(simulation_id, sequence_number)` - Ordered curve data
-- `(test_result_id, sequence_number)` - Ordered test data
+---
 
-## Views
+### Table 2: `recipe`
 
-### v_active_simulations
-Quick view of recent completed simulations with user info.
+A complete set of test conditions. One row = one full combination of all parameters. Created when a research engineer clicks "生成工单" in the 正向 tab.
 
-### v_test_results_summary
-Summary of test results with file counts and device info.
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER PK | |
+| user_id | FK → user.id | Who created this recipe |
+| ignition_model | VARCHAR(50) | 点火具型号 |
+| nc_type_1 | VARCHAR(50) | NC类型1 |
+| nc_usage_1 | FLOAT | NC用量1 (毫克) |
+| nc_type_2 | VARCHAR(50) | NC类型2 |
+| nc_usage_2 | FLOAT | NC用量2 (毫克) |
+| gp_type | VARCHAR(50) | GP类型 |
+| gp_usage | FLOAT | GP用量 (毫克) |
+| shell_model | VARCHAR(50) | 管壳高度 (mm) |
+| current_condition | VARCHAR(50) | 通电条件 |
+| sensor_range | VARCHAR(50) | 传感器量程 |
+| body_model | VARCHAR(50) | 容积 |
+| equipment | VARCHAR(50) | 测试设备 |
+| created_at | DATETIME | |
 
-## Installation
+Dropdown options for these fields are hardcoded in HTML templates with a "自定义" (custom) option. Custom values are stored directly in the recipe row.
 
-### 1. Install PostgreSQL
-```bash
-# macOS
-brew install postgresql@15
-brew services start postgresql@15
+---
 
-# Ubuntu
-sudo apt-get install postgresql-15
+### Table 3: `work_order`
+
+The 工单 is the core linking entity. It connects a recipe (test conditions) with experiment files and simulations, plus captures administrative metadata.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER PK | |
+| work_order_number | VARCHAR(50) UNIQUE NOT NULL | e.g. `WO202602181430225678` |
+| recipe_id | FK → recipe.id NOT NULL | The test conditions |
+| user_id | FK → user.id NOT NULL | Who created it |
+| employee_id | VARCHAR(100) | 工号 |
+| test_name | VARCHAR(200) | 测试名称 |
+| notes | TEXT | 备注 |
+| test_date | DATE | Test date |
+| test_time | VARCHAR(10) | Test time |
+| source | VARCHAR(20) | `simulation` (正向 tab) or `experiment` (实验结果 tab) |
+| created_at | DATETIME | |
+| updated_at | DATETIME | |
+
+**Two creation paths:**
+1. **正向 tab** — research engineer clicks "生成工单", work_order_number is auto-generated, `source='simulation'`
+2. **实验结果 tab** — lab engineer manually types the work_order_number, `source='experiment'`
+
+---
+
+### Table 4: `experiment_file`
+
+Each uploaded Excel file (time vs pressure data). Multiple files can belong to one work order — this is normal because chemical tests are repeated multiple times under the same conditions.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER PK | |
+| work_order_id | FK → work_order.id NOT NULL | Which 工单 this belongs to |
+| user_id | FK → user.id NOT NULL | Who uploaded it |
+| original_filename | VARCHAR(255) NOT NULL | User-facing filename |
+| stored_filename | VARCHAR(255) NOT NULL | UUID-based name on disk |
+| file_path | VARCHAR(500) NOT NULL | Full path on disk |
+| file_size | INTEGER | Bytes |
+| uploaded_at | DATETIME | |
+
+---
+
+### Table 5: `simulation`
+
+Simulation results from the 正向 tab. Existing table with a new `work_order_id` FK.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| ... | ... | All existing columns unchanged |
+| work_order_id | FK → work_order.id | NEW — links to work order (nullable for old data) |
+| work_order | VARCHAR(50) | OLD — kept for backward compat |
+
+---
+
+### Table 6: `test_result`
+
+Single file uploads from the "实际数据存储" tab in the 正向 page (for PT curve comparison). Separate workflow from batch experiment uploads. Unchanged.
+
+---
+
+## Relationships
+
+```
+recipe ◄──(1:1)── work_order ──(1:*)──► experiment_file
+                      │
+                      └──(1:*)──► simulation
 ```
 
-### 2. Create Database
-```bash
-createdb mgg_simulation
+- One `recipe` per `work_order` (the test conditions are fixed for a work order)
+- Many `experiment_file` rows per `work_order` (multiple test runs)
+- A `work_order` may have zero or more `simulation` results
+
+---
+
+## Data Flows
+
+### Research Engineer — 正向 Simulation
+
+```
+1. Select parameters (点火具, NC, GP, 管壳, 通电条件, 传感器量程, 容积, 设备)
+2. Click "生成工单" → auto-generate work order number
+3. Click "计算"
+4. Backend: recipe → work_order → simulation (with PT curve result)
 ```
 
-### 3. Run Schema
-```bash
-psql mgg_simulation < database/schema.sql
+### Lab Engineer — 实验结果 Upload
+
+```
+1. Type 工单号 (received from research engineer)
+2. Fill metadata (工号, 测试设备, 日期, 时间)
+3. Upload multiple .xlsx files (repeated test runs)
+4. Backend: find/create work_order → create experiment_file rows
 ```
 
-### 4. Install Python Dependencies
-```bash
-pip install psycopg2-binary sqlalchemy pandas pyarrow
+### Data Retrieval — Plotting
+
+```
+1. Look up work_order by number
+2. JOIN recipe to see test conditions
+3. Load experiment_file records → read Excel files
+4. Plot individual PT curves or compute average
 ```
 
-## Connection String
+---
 
-Development:
-```
-postgresql://user:password@localhost:5432/mgg_simulation
-```
+## Concurrency
 
-Production:
-```
-postgresql://user:password@prod-db.example.com:5432/mgg_simulation?sslmode=require
-```
+The app supports multiple simultaneous users on the local network.
 
-## Backup Strategy
+| Scenario | Handling |
+|----------|----------|
+| Two users create different work orders | No conflict — different rows |
+| Two users upload files to the same work order | Safe — independent experiment_file rows |
+| Concurrent reads + writes | SQLite WAL mode allows readers not to block writers |
+| File upload failure | DB transaction rollback + cleanup file from disk |
 
-### PostgreSQL Backups
-```bash
-# Daily backup
-pg_dump -Fc mgg_simulation > backup_$(date +%Y%m%d).dump
+**SQLite WAL mode** is enabled for concurrent read/write performance.
 
-# Restore
-pg_restore -d mgg_simulation backup_20240115.dump
-```
+---
 
-### Parquet Archive Backups
-- Store Parquet files in S3/object storage
-- Enable versioning for disaster recovery
-- Parquet files are immutable (no updates)
+## Note on `database/` Directory
 
-## Migration Path from SQLite
-
-See `database/migrate_from_sqlite.py` for migration script.
-
-## Performance Tuning
-
-### PostgreSQL Configuration
-```sql
--- Increase shared buffers (25% of RAM)
-ALTER SYSTEM SET shared_buffers = '2GB';
-
--- Increase work memory for sorting
-ALTER SYSTEM SET work_mem = '64MB';
-
--- Enable query planner statistics
-ALTER SYSTEM SET track_activities = on;
-ALTER SYSTEM SET track_counts = on;
-```
-
-### Partitioning (Future)
-For very large datasets, consider partitioning by date:
-```sql
--- Partition simulation_time_series by month
-CREATE TABLE simulation_time_series_2024_01 PARTITION OF simulation_time_series
-FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
-```
-
-## Monitoring
-
-### Key Metrics
-- Query performance (slow query log)
-- Table sizes (`pg_total_relation_size`)
-- Index usage (`pg_stat_user_indexes`)
-- Archive batch success rate
-
-### Queries
-```sql
--- Table sizes
-SELECT
-    tablename,
-    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
-FROM pg_tables
-WHERE schemaname = 'public'
-ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
-
--- Unused indexes
-SELECT
-    schemaname,
-    tablename,
-    indexname,
-    idx_scan
-FROM pg_stat_user_indexes
-WHERE idx_scan = 0
-ORDER BY pg_relation_size(indexrelid) DESC;
-```
-
-## Security
-
-### Access Control
-- Use least privilege principle
-- Separate read-only and read-write roles
-- Enable row-level security for multi-tenant data
-
-### Encryption
-- Enable SSL/TLS for connections
-- Encrypt backups
-- Use pgcrypto for sensitive data fields
-
-## Next Steps
-
-1. Implement database connection pool (SQLAlchemy)
-2. Create archival automation script
-3. Build admin dashboard for database monitoring
-4. Set up automated backups
-5. Implement data validation triggers
+This directory also contains files for a planned PostgreSQL migration (`models.py`, `schema.sql`, `init_db.py`, `archive_manager.py`, etc.). These are **not connected** to the running Flask app. The active database models live in `app/models.py` using Flask-SQLAlchemy with SQLite.

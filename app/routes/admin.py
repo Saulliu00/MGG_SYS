@@ -1,8 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
 from functools import wraps
-from app import db
-from app.models import User
+from database import db, User
 from app.utils import log_manager
 from app.config.logging_config import ADMIN_LOG_VIEW
 

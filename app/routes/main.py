@@ -27,7 +27,7 @@ def health_check():
     # Check database connection
     if HEALTH_CHECK.get('check_database', True):
         try:
-            from app import db
+            from database import db
             from sqlalchemy import text
             # Simple query to check database connectivity
             db.session.execute(text('SELECT 1'))

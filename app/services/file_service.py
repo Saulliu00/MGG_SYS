@@ -5,7 +5,7 @@ from typing import Dict
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from app.models import TestResult
+from database import TestResult
 from app.utils.file_handler import FileHandler
 from app.utils.subprocess_runner import SubprocessRunner
 from app.utils.paths import (
