@@ -4,6 +4,7 @@ from functools import wraps
 from database import db, User
 from app.utils import log_manager
 from app.config.logging_config import ADMIN_LOG_VIEW
+from app.utils.system_monitor import get_system_metrics
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -173,3 +174,36 @@ def log_statistics():
         'success': True,
         'statistics': stats
     })
+
+
+# ============================================================
+# System Monitor Routes
+# ============================================================
+
+@bp.route('/monitor')
+@login_required
+@admin_required
+def monitor():
+    """System health monitoring dashboard."""
+    return render_template('admin/monitor.html', metrics=get_system_metrics())
+
+
+@bp.route('/monitor/data')
+@login_required
+@admin_required
+def monitor_data():
+    """Return current metrics as JSON (for future auto-refresh)."""
+    return jsonify({'success': True, 'metrics': get_system_metrics()})
+
+
+@bp.route('/user/<int:user_id>/kick', methods=['POST'])
+@login_required
+@admin_required
+def kick_user(user_id):
+    """Force a user offline by invalidating their session token."""
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        return jsonify({'success': False, 'message': '不能踢出自己的账户'})
+    user.session_token = None
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'用户 {user.employee_id} 已被强制下线'})

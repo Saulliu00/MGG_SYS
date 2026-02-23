@@ -15,6 +15,8 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(20), nullable=False, default='research_engineer')
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen_at = db.Column(db.DateTime, nullable=True, default=None)
+    session_token = db.Column(db.String(36), nullable=True, default=None)
 
     # Relationships
     simulations = db.relationship('Simulation', backref='user', lazy=True)

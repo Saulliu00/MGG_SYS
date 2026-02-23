@@ -35,13 +35,15 @@ User accounts with role-based access control.
 | Column | Type | Description |
 |--------|------|-------------|
 | id | INTEGER PK | |
-| username | VARCHAR(80) | Display name |
+| username | VARCHAR(80) | Display name (optional) |
 | employee_id | VARCHAR(120) UNIQUE NOT NULL | Login identifier (工号) |
 | password_hash | VARCHAR(128) NOT NULL | Bcrypt hash |
 | phone | VARCHAR(20) | |
 | role | VARCHAR(20) NOT NULL | `admin`, `research_engineer`, `lab_engineer` |
 | is_active | BOOLEAN | Account enabled/disabled |
 | created_at | DATETIME | |
+| last_seen_at | DATETIME | Timestamp of last HTTP request; used by monitor to determine online status (30-min window) |
+| session_token | VARCHAR(36) | UUID generated at login; cleared by admin kick or normal logout; mismatch forces re-login |
 
 ---
 
@@ -191,6 +193,26 @@ The app supports multiple simultaneous users on the local network.
 
 ---
 
-## Note on `database/` Directory
+## `database/` Package Structure
 
-This directory also contains files for a planned PostgreSQL migration (`models.py`, `schema.sql`, `init_db.py`, `archive_manager.py`, etc.). These are **not connected** to the running Flask app. The active database models live in `app/models.py` using Flask-SQLAlchemy with SQLite.
+The `database/` directory is the active database layer imported by the Flask app. It is a proper Python package.
+
+| File | Role |
+|------|------|
+| `__init__.py` | Public API — re-exports all models, extensions, `init_database`, `daily_backup` |
+| `extensions.py` | Flask extension instances (`db`, `login_manager`, `bcrypt`) — zero project imports, the circular-import root |
+| `models.py` | All 6 SQLAlchemy models (User, Simulation, TestResult, Recipe, WorkOrder, ExperimentFile) |
+| `manager.py` | `init_database(app)` — calls `db.create_all()`, enables WAL mode, runs column migrations, seeds default admin |
+| `backup.py` | `daily_backup(app)` — SQLite online backup to `instance/backups/`, retains 30 days |
+| `schema.sql` | Schema documentation snapshot generated from the live database |
+| `database_regression_test.py` | 48-test regression suite covering all models, relationships, constraints, and backup logic |
+
+`app/__init__.py` imports from this package:
+```python
+from database import db, login_manager, bcrypt, init_database
+```
+
+All route files import models directly:
+```python
+from database import db, User  # etc.
+```

@@ -44,6 +44,18 @@ def _run_migrations(app):
             )
             conn.commit()
             app.logger.info('Migration: Added work_order_id to simulation table')
+
+        cursor.execute('PRAGMA table_info("user")')
+        user_cols = [col[1] for col in cursor.fetchall()]
+        if 'last_seen_at' not in user_cols:
+            cursor.execute('ALTER TABLE "user" ADD COLUMN last_seen_at DATETIME')
+            conn.commit()
+            app.logger.info('Migration: Added last_seen_at to user table')
+        if 'session_token' not in user_cols:
+            cursor.execute('ALTER TABLE "user" ADD COLUMN session_token VARCHAR(36)')
+            conn.commit()
+            app.logger.info('Migration: Added session_token to user table')
+
         conn.close()
     except Exception as e:
         app.logger.warning(f'Migration check failed: {str(e)}')

@@ -47,6 +47,8 @@ Web App (Flask + Gunicorn)
      - **实验工程师** (Lab Engineer) - 仅访问实验结果
      - **研发工程师** (R&D Engineer) - 访问正向/逆向仿真
    - 每日登录要求（每天0点自动过期，需重新登录）
+   - **基于会话令牌的即时踢出机制**（管理员可强制任意用户下线）
+   - **最后活动时间追踪**（每次请求更新 `last_seen_at`）
    - 安全特性：HTTPOnly cookies, 开放重定向防护, 路径遍历防护
    - 失败登录尝试日志记录
 
@@ -71,7 +73,14 @@ Web App (Flask + Gunicorn)
    - 密码重置
    - **系统日志查看器**（CSV格式，路径遍历防护）
    - 日志文件下载
-   - 系统健康监控
+   - **系统监控仪表板** (`/admin/monitor`)：
+     - CPU / 内存使用率（带颜色阈值进度条）
+     - 磁盘空间（数据库、上传文件夹、备份文件夹）
+     - 数据库统计（各表行数、备份信息）
+     - 今日请求统计（总数、错误数、慢请求数）
+     - 软件异常日志（ERROR / CRITICAL 级别）
+     - 访问失败 / 暴力破解检测（自动标记 >5 次失败的IP）
+     - **当前在线用户列表**（30分钟内有活动）+ **一键踢出**
 
 ### 5. **网络与多用户支持**
    - 局域网多用户访问
@@ -95,6 +104,7 @@ Web App (Flask + Gunicorn)
    - 旧日志自动清理（90天保留期）
    - 数据库自动初始化
    - 默认管理员账户创建
+   - **每日数据库自动备份**（每天0点用户重新登录前触发，保留最近30天备份）
 
 ## 技术栈
 
@@ -187,9 +197,16 @@ gunicorn -c gunicorn.conf.py run:app
 
 ```
 MGG_SYS/
+├── database/                    # 数据库层（模型、扩展、初始化、备份）
+│   ├── __init__.py              # 公共API（导出所有模型和工具）
+│   ├── extensions.py            # Flask扩展实例（db, login_manager, bcrypt）
+│   ├── models.py                # 6个数据库模型
+│   ├── manager.py               # 初始化、WAL模式、迁移、默认管理员
+│   ├── backup.py                # 每日自动备份（保留30天）
+│   ├── schema.sql               # 数据库结构备份文档
+│   └── README.md                # 数据库设计文档
 ├── app/
 │   ├── __init__.py              # Flask应用工厂
-│   ├── models.py                # 数据库模型
 │   ├── config/                  # 配置文件
 │   │   ├── network_config.py    # 网络与多用户配置
 │   │   ├── plot_config.py       # 图表样式配置
@@ -215,7 +232,8 @@ MGG_SYS/
 │   │   ├── subprocess_runner.py # 子进程管理
 │   │   ├── plotter.py           # Plotly图表生成
 │   │   ├── logo_generator.py    # Logo生成器
-│   │   └── log_manager.py       # 日志管理器
+│   │   ├── log_manager.py       # 日志管理器
+│   │   └── system_monitor.py    # 系统监控指标采集（CPU/内存/磁盘/DB/日志/在线用户）
 │   ├── static/                  # 静态文件
 │   │   ├── css/
 │   │   │   └── style.css        # 自定义样式
@@ -226,7 +244,7 @@ MGG_SYS/
 │   │   │   └── logos/           # 系统Logo（自动生成）
 │   │   │       ├── mgg_logo.png
 │   │   │       └── favicon.ico
-│   │   └── uploads/             # 用户上传文件
+│   │   └── uploads/             # 用户上传文件（见下方注意事项）
 │   ├── templates/               # HTML模板
 │   │   ├── base.html            # 基础模板
 │   │   ├── auth/
@@ -238,13 +256,16 @@ MGG_SYS/
 │   │   │   └── history.html     # 实验结果（批量上传）
 │   │   └── admin/
 │   │       ├── index.html       # 用户管理
-│   │       └── logs.html        # 系统日志查看器
+│   │       ├── logs.html        # 系统日志查看器
+│   │       └── monitor.html     # 系统监控仪表板
 │   └── log/                     # 系统日志（CSV格式）
 │       ├── .gitignore
 │       └── mgg_system_log_YYYY-MM-DD.csv
 ├── demo/                        # 独立演示环境（隔离）
 ├── models/                      # 仿真模型文件
 ├── instance/                    # 实例文件（数据库）
+│   ├── simulation_system.db     # SQLite主数据库
+│   └── backups/                 # 每日自动备份（simulation_system_YYYY-MM-DD.db）
 ├── gunicorn.conf.py            # Gunicorn生产配置
 ├── config.py                   # Flask配置
 ├── run.py                      # 应用入口
@@ -315,6 +336,48 @@ MGG_SYS/
    - **重置密码** - 为用户设置新密码
    - **删除用户** - 永久删除用户账户
 
+### 系统监控（管理员）
+
+1. 点击侧边栏 **"Access Control → 系统监控"**
+2. 查看7个监控面板：CPU/内存、磁盘空间、数据库统计、今日请求、软件异常、访问失败检测、当前在线用户
+3. **踢出用户**：在"当前在线用户"表格中，点击目标用户行的 **"踢出"** 按钮
+   - 管理员无法踢出自己
+   - 被踢出的用户下次请求时立即跳转至登录页面
+4. 点击右上角 **"刷新"** 按钮更新所有数据
+
+## 数据存储注意事项
+
+### 上传文件存储
+
+> ⚠️ **注意**: `app/static/uploads/` 位于应用程序文件夹内，这意味着：
+> - 上传的文件可能被意外纳入git追踪
+> - 如果应用程序文件夹被替换或重新部署，文件将丢失
+>
+> **生产环境建议**: 将上传目录移至项目目录之外（例如 `/var/data/mgg_uploads/`），
+> 并在 `app/__init__.py` 中将 `UPLOAD_FOLDER` 指向该路径。
+
+上传文件存储结构：
+```
+app/static/uploads/
+    <uuid>_<original_filename>.xlsx    # UUID命名避免文件名冲突
+```
+文件的原始文件名和磁盘路径记录在数据库 `experiment_file` 表中，可通过 `work_order_id` 查询。
+
+### 每日数据库自动备份
+
+系统在每天0点用户重新登录时自动备份 SQLite 数据库：
+
+- **备份位置**: `instance/backups/simulation_system_YYYY-MM-DD.db`
+- **触发时机**: 每天第一个发起请求的用户触发，在会话失效之前执行
+- **保留策略**: 保留最近 **30天** 备份，自动删除更早的备份
+- **备份方式**: 使用 SQLite 内置在线备份 API，数据库正在使用时也可安全执行
+
+手动恢复备份：
+```bash
+# 将某天的备份还原为主数据库
+cp instance/backups/simulation_system_2026-02-17.db instance/simulation_system.db
+```
+
 ## API端点
 
 ### 认证
@@ -344,9 +407,12 @@ MGG_SYS/
 | `/admin/user/<id>/toggle` | POST | 管理员 | 切换用户状态 |
 | `/admin/user/<id>/delete` | POST | 管理员 | 删除用户 |
 | `/admin/user/<id>/reset-password` | POST | 管理员 | 重置密码 |
+| `/admin/user/<id>/kick` | POST | 管理员 | 强制用户下线（清除会话令牌） |
 | `/admin/logs` | GET | 管理员 | 系统日志页面 |
 | `/admin/logs/view` | GET | 管理员 | 查看日志内容 |
 | `/admin/logs/download/<filename>` | GET | 管理员 | 下载日志文件 |
+| `/admin/monitor` | GET | 管理员 | 系统监控仪表板 |
+| `/admin/monitor/data` | GET | 管理员 | 监控数据（JSON） |
 
 ### 系统
 | 端点 | 方法 | 认证 | 说明 |
@@ -358,13 +424,15 @@ MGG_SYS/
 ### User (用户)
 ```python
 - id: Integer, PrimaryKey
-- username: String(80), Unique, NotNull
-- employee_id: String(120), Unique, NotNull  # 工号
+- username: String(80)                        # 显示名称（可选）
+- employee_id: String(120), Unique, NotNull   # 工号（登录标识）
 - password_hash: String(128), NotNull
 - role: String(20), NotNull, Default='research_engineer'
   # 'admin' | 'lab_engineer' | 'research_engineer'
 - is_active: Boolean, Default=True
 - created_at: DateTime, Default=now()
+- last_seen_at: DateTime, Nullable            # 最后一次请求时间（用于在线状态判断）
+- session_token: String(36), Nullable         # UUID令牌（登录时生成，踢出时清除）
 ```
 
 ### Simulation (仿真记录)
@@ -537,6 +605,12 @@ curl http://localhost:5001/health
 
 # 日志统计
 curl http://localhost:5001/admin/logs/statistics
+
+# 系统监控仪表板（需管理员登录）
+# 访问 http://localhost:5001/admin/monitor
+
+# 监控数据 JSON（需管理员登录）
+curl http://localhost:5001/admin/monitor/data
 ```
 
 响应示例:
@@ -616,6 +690,21 @@ wc -l app/log/*.csv
 
 ## 版本历史
 
+### v1.5 (2026-02-18)
+- ✨ 新增系统监控仪表板（`/admin/monitor`）：CPU/内存/磁盘/数据库/请求统计/异常日志/暴力破解检测
+- ✨ 新增当前在线用户列表（`last_seen_at` 追踪，30分钟活动窗口）
+- ✨ 新增管理员一键踢出功能（基于 UUID `session_token` 会话令牌，即时生效）
+- ✨ `psutil` 集成（CPU/内存实时指标）
+- 🏗️ `app/utils/system_monitor.py` 纯Python指标采集模块（无Flask依赖，每节独立容错）
+- 🏗️ User模型新增 `last_seen_at` 和 `session_token` 列（含自动数据库迁移）
+
+### v1.4 (2026-02-18)
+- ✨ 数据库层模块化（迁移至独立 `database/` 包）
+- ✨ 每日数据库自动备份（SQLite在线备份，保留30天）
+- ✨ 新增 `database/schema.sql` 数据库结构备份文档
+- 📝 新增数据存储注意事项（上传文件位置、生产环境建议）
+- 🏗️ 移除 `app/models.py`，所有模型统一管理于 `database/models.py`
+
 ### v1.3 (2026-02-07)
 - ✨ 三级角色访问控制（Admin/实验工程师/研发工程师）
 - ✨ 每日登录要求（0点自动过期）
@@ -690,5 +779,5 @@ wc -l app/log/*.csv
 
 ---
 
-**最后更新**: 2026-02-07
+**最后更新**: 2026-02-18
 **维护团队**: MGG开发组

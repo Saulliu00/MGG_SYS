@@ -9,6 +9,7 @@ from database.models import (
     ExperimentFile,
 )
 from database.manager import init_database
+from database.backup import daily_backup
 
 __all__ = [
     'db',
@@ -21,4 +22,5 @@ __all__ = [
     'WorkOrder',
     'ExperimentFile',
     'init_database',
+    'daily_backup',
 ]

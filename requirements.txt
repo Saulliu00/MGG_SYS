@@ -28,3 +28,4 @@ Flask-Bcrypt==1.0.1
 
 # Utilities
 python-dotenv==1.0.0
+psutil==5.9.8

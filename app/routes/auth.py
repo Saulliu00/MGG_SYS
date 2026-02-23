@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app
+import uuid
+from datetime import date, datetime
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, make_response
 from flask_login import login_user, logout_user, current_user, login_required
 from urllib.parse import urlparse
 from database import db, User
 from app.middleware import log_user_login, log_user_logout
 from app.utils import log_manager
-from datetime import date
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -18,9 +19,29 @@ def check_daily_login():
     ):
         return
     if current_user.is_authenticated:
+        # Validate session token — clears if admin has kicked this user
+        auth_token = session.get('auth_token')
+        if auth_token != current_user.session_token:
+            logout_user()
+            session.clear()
+            resp = make_response(redirect(url_for('auth.login')))
+            resp.delete_cookie(
+                current_app.config.get('REMEMBER_COOKIE_NAME', 'remember_token'),
+                path=current_app.config.get('REMEMBER_COOKIE_PATH', '/')
+            )
+            flash('您已被管理员强制下线', 'warning')
+            return resp
+
+        # Update last-seen timestamp so active-user monitor stays accurate
+        current_user.last_seen_at = datetime.utcnow()
+        db.session.commit()
+
         login_date = session.get('login_date')
         today = date.today().isoformat()
         if login_date != today:
+            # Run daily backup before invalidating the session
+            from database import daily_backup
+            daily_backup(current_app._get_current_object())
             logout_user()
             flash('新的一天，请重新登录', 'info')
             resp = redirect(url_for('auth.login'))
@@ -46,6 +67,10 @@ def login():
             login_user(user)
             session.permanent = True
             session['login_date'] = date.today().isoformat()
+            token = str(uuid.uuid4())
+            user.session_token = token
+            db.session.commit()
+            session['auth_token'] = token
             # Log successful login
             log_user_login(
                 username=user.username,
@@ -77,13 +102,15 @@ def login():
 
 @bp.route('/logout')
 def logout():
-    # Log logout before clearing session
+    # Log logout and clear session token before ending session
     if current_user.is_authenticated:
         log_user_logout(
             username=current_user.username,
             user_id=current_user.id,
             ip_address=request.remote_addr
         )
+        current_user.session_token = None
+        db.session.commit()
     logout_user()
     resp = redirect(url_for('auth.login'))
     # Explicitly clear remember cookie to prevent redirect loops
