@@ -270,6 +270,8 @@ MGG_SYS/
 ├── config.py                   # Flask配置
 ├── run.py                      # 应用入口
 ├── requirements.txt            # Python依赖
+├── system_regression_test.py   # 系统回归测试（130项HTTP层测试）
+├── stress_test.py              # 并发压力测试（容量分析与崩溃诊断）
 ├── README.md                   # 项目文档（本文件）
 └── NETWORK_DEPLOYMENT.md       # 网络部署指南
 ```
@@ -344,6 +346,100 @@ MGG_SYS/
    - 管理员无法踢出自己
    - 被踢出的用户下次请求时立即跳转至登录页面
 4. 点击右上角 **"刷新"** 按钮更新所有数据
+
+## 测试
+
+项目包含三个独立的测试文件，各自覆盖不同层次。所有测试使用临时 SQLite 数据库，不影响生产数据。
+
+### 1. 数据库回归测试（`database/database_regression_test.py`）
+
+测试数据库层：6个模型、关系约束、WAL模式、自动迁移、每日备份逻辑。共 **48项测试**。
+
+```bash
+python database/database_regression_test.py -v
+```
+
+| 测试类 | 测试内容 |
+|--------|---------|
+| `TestExtensions` | db / login_manager / bcrypt 实例 |
+| `TestInitDatabase` | `init_database()`、WAL模式、管理员种子数据 |
+| `TestUserModel` | 用户创建、密码哈希、唯一性约束 |
+| `TestRecipeModel` | Recipe 创建、外键关联 |
+| `TestWorkOrderModel` | WorkOrder 唯一性、日期字段、关联链路 |
+| `TestExperimentFileModel` | ExperimentFile 创建、级联删除 |
+| `TestSimulationModel` | Simulation 创建、JSON结果字段 |
+| `TestRelationships` | 完整关联链路（User→Recipe→WorkOrder→File） |
+| `TestBackup` | 备份文件生成、有效性、30天轮转 |
+
+---
+
+### 2. 系统回归测试（`system_regression_test.py`）
+
+通过 Flask 测试客户端对全部 HTTP 路由进行端到端回归测试。共 **130项测试**，覆盖所有蓝图和角色。
+
+```bash
+python system_regression_test.py -v
+```
+
+| 测试类 | 测试数 | 覆盖内容 |
+|--------|--------|---------|
+| `TestHealthAndRoot` | 8 | `/health` 返回格式、公开访问；`/` 按角色重定向 |
+| `TestAuthLogin` | 11 | 登录成功/失败、`session_token` 同步、非激活用户拒绝 |
+| `TestAuthLogout` | 4 | 令牌清除、会话失效 |
+| `TestAuthRegister` | 7 | 用户创建、重复工号、密码不匹配 |
+| `TestAuthSettings` | 7 | 信息更新、密码修改（成功/错误密码/长度不足） |
+| `TestSessionTokenValidation` | 7 | 令牌不匹配强制下线、踢出后重定向、重新登录恢复 |
+| `TestUnauthenticatedAccess` | 13 | 所有受保护路由均阻止匿名访问 |
+| `TestRoleBasedAccess` | 10 | `research_required` / `lab_required` / `admin_required` 权限 |
+| `TestAdminUserManagement` | 13 | 用户增删改查、角色验证、密码重置 |
+| `TestAdminMonitor` | 8 | 仪表板加载、全部8个指标节、在线用户列表 |
+| `TestAdminLogs` | 6 | 日志页面、JSON内容、统计接口 |
+| `TestSimulationPages` | 6 | 各角色对正向/逆向/历史页面的访问权限 |
+| `TestSimulationRunUpload` | 7 | POST接口均返回 JSON；缺失文件的错误处理 |
+| `TestExperimentSubmission` | 10 | 工单创建、ExperimentFile记录、磁盘写入、多文件、追加上传 |
+| `TestSystemMonitorUnit` | 13 | `get_system_resources` / `get_db_stats` / `get_active_users` 单元测试 |
+
+---
+
+### 3. 并发压力测试（`stress_test.py`）
+
+模拟多角色用户并发访问，逐级提升并发数，定位系统容量上限和崩溃原因。
+
+```bash
+# 默认：2,5,10,20,50 并发用户，混合读写
+python stress_test.py
+
+# 自定义分层，写密集模式
+python stress_test.py --tiers 5,10,25,50,100,150 --write-heavy --stop-on-fail
+
+# 快速冒烟测试
+python stress_test.py --tiers 2,5,10 --requests 4
+```
+
+**参数说明：**
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--tiers` | `2,5,10,20,50` | 各阶段并发用户数（逗号分隔） |
+| `--requests` | `8` | 每用户每阶段的请求循环次数 |
+| `--write-heavy` | 关 | 强制全角色执行写操作（压测 SQLite 写锁） |
+| `--stop-on-fail` | 关 | 有效错误率 ≥ 30% 时停止后续阶段 |
+
+**报告指标：**
+
+每阶段输出吞吐量、延迟分位（p50/p95/p99）、HTTP错误率、挂起线程数、按端点的失败分布，并在测试结束时给出容量区间和崩溃根因。
+
+**已发现的系统限制（写密集模式测试结果）：**
+
+| 并发用户 | 吞吐量 | p99延迟 | 挂起线程 | 状态 |
+|---------|--------|---------|---------|------|
+| ≤ 50 | 42–51 req/s | < 4 s | 0 | ✓ 健康 |
+| 100 | 52 req/s | 8.4 s | 0 | ~ 轻微降级 |
+| 150 | 54 req/s | 16.3 s | 106/150 (71%) | ✗ 停滞 |
+
+**崩溃根因**：SQLAlchemy 连接池耗尽（默认上限 15 个连接），大量并发线程等待连接超时（30秒），触发 `QueuePool limit of size 5 overflow 10 reached` 异常。系统不会直接返回 HTTP 错误，而是通过线程阻塞的方式停滞。
+
+---
 
 ## 数据存储注意事项
 
@@ -689,6 +785,11 @@ wc -l app/log/*.csv
 ```
 
 ## 版本历史
+
+### v1.6 (2026-02-18)
+- ✨ 新增系统回归测试（`system_regression_test.py`）：130项HTTP层端到端测试，覆盖全部路由与角色权限
+- ✨ 新增并发压力测试（`stress_test.py`）：多阶段用户梯度测试，自动定位系统瓶颈与崩溃根因
+- 🔍 压力测试发现：≤50并发用户健康运行（51 req/s），150用户触发 SQLAlchemy 连接池耗尽（QueuePool限制）
 
 ### v1.5 (2026-02-18)
 - ✨ 新增系统监控仪表板（`/admin/monitor`）：CPU/内存/磁盘/数据库/请求统计/异常日志/暴力破解检测
