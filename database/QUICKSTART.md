@@ -1,228 +1,186 @@
-# Database Quick Start Guide
+## Quickstart Guide - MGG Database
 
-**5-Minute Setup** - Get the MGG database running quickly
-
----
-
-## Prerequisites Check
-
-```bash
-# Check PostgreSQL installation
-psql --version
-# Should show: psql (PostgreSQL) 15.x or higher
-
-# Check Python version
-python3 --version
-# Should show: Python 3.9 or higher
-```
+**Get up and running in 5 minutes.**
 
 ---
 
-## Step 1: Create Database (1 min)
+## 🚀 Quick Setup
 
-```bash
-# Create the database
-createdb mgg_simulation
-
-# Verify it was created
-psql -l | grep mgg_simulation
-```
-
----
-
-## Step 2: Install Python Dependencies (1 min)
-
-```bash
-cd database/
-
-# Install required packages
-pip install -r requirements.txt
-
-# Verify installation
-python3 -c "import sqlalchemy; print(f'SQLAlchemy {sqlalchemy.__version__}')"
-```
-
----
-
-## Step 3: Configure Environment (1 min)
-
-```bash
-# Copy example environment file
-cp .env.example .env
-
-# Edit .env with your settings (optional - defaults work for local development)
-nano .env
-```
-
-**Default settings work for local PostgreSQL installation.**
-
----
-
-## Step 4: Load Schema (30 seconds)
-
-```bash
-# Validate schema first (optional)
-python3 check_schema.py
-
-# Load schema into database
-psql mgg_simulation < schema.sql
-```
-
-Expected output:
-```
-CREATE TABLE
-CREATE TABLE
-...
-CREATE VIEW
-CREATE VIEW
-INSERT 0 6
-```
-
----
-
-## Step 5: Initialize Data (30 seconds)
-
-```bash
-# Initialize with default data
-python3 init_db.py
-```
-
-Expected output:
-```
-Testing database connection...
-✓ Database connection successful
-Creating database tables...
-✓ All tables created successfully
-Seeding initial data...
-✓ Seeded 3 igniter types
-✓ Seeded 3 NC types
-✓ Seeded 2 GP types
-✓ Seeded 3 test devices
-✓ Seeded 6 retention policies
-✓ Created admin user (username: admin, password: admin123)
-```
-
----
-
-## Step 6: Verify Installation (30 seconds)
-
-```bash
-# Test database connection
-python3 -c "from db_config import test_db_connection; test_db_connection()"
-
-# Check tables were created
-psql mgg_simulation -c "\dt"
-
-# Check admin user was created
-psql mgg_simulation -c "SELECT username, employee_id, role FROM users;"
-```
-
----
-
-## ✅ Done!
-
-Your database is now ready to use.
-
-### Default Admin Credentials:
-- **Username**: `admin`
-- **Password**: `admin123`
-
-⚠️ **IMPORTANT**: Change the admin password immediately!
-
----
-
-## Optional: Add Sample Data
-
-```bash
-# Add sample simulations, tests, and comparisons for testing
-python3 seed_data.py
-```
-
-This creates:
-- 2 sample users (engineer1, user1)
-- 2 sample work orders
-- 1 sample forward simulation with PT curve
-- 1 sample test result with PT curve
-- 1 sample PT comparison
-- 4 sample operation logs
-
----
-
-## Quick Commands Reference
-
-```bash
-# View all tables
-psql mgg_simulation -c "\dt"
-
-# View table structure
-psql mgg_simulation -c "\d users"
-
-# Count records in a table
-psql mgg_simulation -c "SELECT COUNT(*) FROM users;"
-
-# Reset database (WARNING: Deletes all data!)
-python3 init_db.py --reset
-
-# Backup database
-pg_dump -Fc mgg_simulation > backup.dump
-
-# Restore database
-pg_restore -d mgg_simulation backup.dump
-```
-
----
-
-## Troubleshooting
-
-### "Command not found: createdb"
-PostgreSQL is not installed or not in PATH.
-```bash
-# macOS
-brew install postgresql@15
-brew services start postgresql@15
-
-# Ubuntu
-sudo apt-get install postgresql-15
-```
-
-### "Connection refused"
-PostgreSQL is not running.
-```bash
-# macOS
-brew services start postgresql@15
-
-# Ubuntu
-sudo systemctl start postgresql
-```
-
-### "Permission denied"
-Need to create PostgreSQL user or grant permissions.
-```bash
-# Create user (as postgres user)
-sudo -u postgres createuser -s $USER
-
-# Or grant permissions
-psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE mgg_simulation TO $USER;"
-```
-
-### "Module not found: sqlalchemy"
-Python dependencies not installed.
+### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
+### 2. Initialize Database
+```python
+from app import create_app
+from database.manager import init_database
+
+app = create_app()
+init_database(app)
+```
+
+**That's it!** The database is created with:
+- ✅ All tables
+- ✅ Indexes
+- ✅ Default admin user (`admin/admin123`)
+- ✅ 2 example recipes
+- ✅ WAL mode enabled (SQLite)
+
 ---
 
-## Next Steps
+## 📝 Common Tasks
 
-1. ✅ Database is set up
-2. 🔧 Integrate with Flask app (see main project README)
-3. 🔒 Change admin password
-4. 📊 Start using the system
+### Create a User
+```python
+from database.models import User
+from database.extensions import db
+
+user = User(
+    username='John Doe',
+    employee_id='E12345',
+    email='john@example.com',
+    role='research_engineer',
+    department='R&D'
+)
+user.set_password('secure_password')
+db.session.add(user)
+db.session.commit()
+```
+
+### Create a Recipe
+```python
+from database.models import Recipe
+
+recipe = Recipe(
+    user_id=user.id,
+    recipe_name='Test Config #1',
+    ignition_model='Type-A',
+    nc_type_1='NC-Standard',
+    nc_usage_1=20.0,
+    gp_type='GP-Alpha',
+    gp_usage=15.0,
+    shell_model='Shell-100mm',
+    current_condition='5A',
+    sensor_range='0-10MPa',
+    body_model='50cc',
+    equipment='Tester-01'
+)
+db.session.add(recipe)
+db.session.commit()
+```
+
+### Run a Simulation
+```python
+from database.models import Simulation, SimulationTimeSeries, WorkOrder
+
+# 1. Create work order
+wo = WorkOrder(
+    work_order_number='WO-001',
+    recipe_id=recipe.id,
+    user_id=user.id,
+    test_name='Baseline Test'
+)
+db.session.add(wo)
+db.session.flush()
+
+# 2. Run simulation (your simulation code here)
+pt_data = [(0.0, 0.0), (10.0, 2.5), (20.0, 5.0), ...]  # Your simulation results
+
+# 3. Save simulation
+sim = Simulation(
+    user_id=user.id,
+    work_order_id=wo.id,
+    test_name='Run #1',
+    peak_pressure=max(p[1] for p in pt_data),
+    num_data_points=len(pt_data),
+    status='completed'
+)
+db.session.add(sim)
+db.session.flush()
+
+# 4. Save time series
+for i, (time, pressure) in enumerate(pt_data):
+    point = SimulationTimeSeries(
+        simulation_id=sim.id,
+        time_point=time,
+        pressure=pressure,
+        sequence_number=i + 1
+    )
+    db.session.add(point)
+
+db.session.commit()
+```
+
+### Query Data
+```python
+# Get all simulations for a user
+sims = Simulation.query.filter_by(user_id=user.id).all()
+
+# Get time series for a simulation
+points = SimulationTimeSeries.query.filter_by(simulation_id=sim.id).all()
+
+# Get recent work orders
+recent_wo = WorkOrder.query.order_by(WorkOrder.created_at.desc()).limit(10).all()
+
+# Find simulations by peak pressure
+high_pressure = Simulation.query.filter(Simulation.peak_pressure > 8.0).all()
+```
 
 ---
 
-## Need Help?
+## 🔧 Maintenance
 
-- **Full Setup Guide**: See [SETUP.md](SETUP.md)
-- **Architecture Details**: See [README.md](README.md)
+### Backup Database
+```python
+from database.manager import backup_database
+
+backup_path = backup_database(app)
+print(f'Backup: {backup_path}')
+```
+
+### Reset Database (⚠️ Deletes all data!)
+```python
+from database.manager import reset_database
+
+reset_database(app)  # Fresh start
+```
+
+### Check Schema
+```bash
+sqlite3 instance/mgg.db ".schema"
+```
+
+---
+
+## 📚 Learn More
+
+- Full documentation: `database/README.md`
+- Schema visualization: `database/schema.sql`
+- Model reference: `database/models.py`
+
+---
+
+## 🐛 Common Issues
+
+### "No module named 'database'"
+```bash
+# Make sure you're in the project root:
+cd /path/to/MGG_SYS
+python your_script.py
+```
+
+### "Database is locked"
+- Enable WAL mode (automatic on init)
+- Or close other connections to the database
+
+### "No such table: user"
+```python
+# Run initialization:
+from database.manager import init_database
+init_database(app)
+```
+
+---
+
+**Need help?** Check `database/README.md` for detailed examples.

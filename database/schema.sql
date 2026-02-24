@@ -1,560 +1,346 @@
--- MGG Simulation System Database Schema
--- PostgreSQL Database for Production Use
--- Architecture: Hot PostgreSQL + Cold Parquet Archive
+-- ============================================================================
+-- MGG Simulation System - Optimized Hybrid Schema
+-- Compatible with: SQLite (development) and PostgreSQL (production)
+-- Design Philosophy: Simplicity + Performance
+-- ============================================================================
+-- 
+-- Key Design Decisions:
+-- 1. Embedded parameter strings (not FK lookups) - simpler queries
+-- 2. CHECK constraints for data validation - enforce valid values
+-- 3. Separated time series tables - efficient querying of large datasets
+-- 4. Recipe abstraction - reusable parameter sets
+-- 5. Proper indexes - optimized for common queries
+--
+-- ============================================================================
 
 -- ============================================
 -- USERS AND AUTHENTICATION
 -- ============================================
 
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(100),
-    role VARCHAR(20) NOT NULL DEFAULT 'user', -- 'admin', 'user', 'engineer'
-    department VARCHAR(50),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_login TIMESTAMP,
-    created_by INTEGER REFERENCES users(id),
-
-    CONSTRAINT check_role CHECK (role IN ('admin', 'user', 'engineer'))
+CREATE TABLE user (
+    id              INTEGER     NOT NULL,
+    username        VARCHAR(80) NOT NULL,
+    employee_id     VARCHAR(120) NOT NULL UNIQUE,
+    email           VARCHAR(120) UNIQUE,
+    password_hash   VARCHAR(128) NOT NULL,
+    phone           VARCHAR(20),
+    role            VARCHAR(20)  NOT NULL DEFAULT 'research_engineer',
+    department      VARCHAR(50),
+    is_active       BOOLEAN     DEFAULT 1,
+    created_at      DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at    DATETIME,
+    session_token   VARCHAR(36),
+    
+    PRIMARY KEY (id),
+    CHECK (role IN ('admin', 'research_engineer', 'lab_engineer'))
 );
 
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_role ON users(role);
-CREATE INDEX idx_users_is_active ON users(is_active);
+CREATE INDEX idx_user_employee_id ON user(employee_id);
+CREATE INDEX idx_user_email ON user(email);
+CREATE INDEX idx_user_role ON user(role);
+
 
 -- ============================================
--- SIMULATION PARAMETERS AND CONFIGURATION
+-- RECIPES (Reusable Parameter Sets)
 -- ============================================
 
-CREATE TABLE igniter_types (
-    id SERIAL PRIMARY KEY,
-    type_code VARCHAR(20) UNIQUE NOT NULL,
-    description TEXT,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE nc_types1 (
-    id SERIAL PRIMARY KEY,
-    type_code VARCHAR(20) UNIQUE NOT NULL,
-    description TEXT,
-    density DECIMAL(10, 4),
-    specific_heat DECIMAL(10, 4),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE nc_types2 (
-    id SERIAL PRIMARY KEY,
-    type_code VARCHAR(20) UNIQUE NOT NULL,
-    description TEXT,
-    density DECIMAL(10, 4),
-    specific_heat DECIMAL(10, 4),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE gp_types (
-    id SERIAL PRIMARY KEY,
-    type_code VARCHAR(20) UNIQUE NOT NULL,
-    description TEXT,
-    density DECIMAL(10, 4),
-    specific_heat DECIMAL(10, 4),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE shell_types (
-    id SERIAL PRIMARY KEY,
-    type_code VARCHAR(20) UNIQUE NOT NULL,
-    description TEXT,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE current_types (
-    id SERIAL PRIMARY KEY,
-    type_code VARCHAR(20) UNIQUE NOT NULL,
-    current_value DECIMAL(10, 4),
-    description TEXT,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE sensor_types (
-    id SERIAL PRIMARY KEY,
-    type_code VARCHAR(20) UNIQUE NOT NULL,
-    description TEXT,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE volume_types (
-    id SERIAL PRIMARY KEY,
-    type_code VARCHAR(20) UNIQUE NOT NULL,
-    volume_value DECIMAL(10, 4),
-    description TEXT,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE test_devices (
-    id SERIAL PRIMARY KEY,
-    device_code VARCHAR(20) UNIQUE NOT NULL,
-    device_name VARCHAR(100),
-    location VARCHAR(100),
-    calibration_date DATE,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- ============================================
--- EMPLOYEES (Test Operators)
--- ============================================
-
-CREATE TABLE employees (
-    id SERIAL PRIMARY KEY,
-    employee_id VARCHAR(50) UNIQUE NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
-    department VARCHAR(50),
-    position VARCHAR(50),
-    email VARCHAR(100),
-    phone VARCHAR(20),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_employees_employee_id ON employees(employee_id);
-CREATE INDEX idx_employees_department ON employees(department);
-CREATE INDEX idx_employees_is_active ON employees(is_active);
-
--- ============================================
--- TICKETS (Ticket System)
--- ============================================
-
-CREATE TABLE tickets (
-    id SERIAL PRIMARY KEY,
-    ticket_number VARCHAR(50) UNIQUE NOT NULL,
-    work_order_id INTEGER REFERENCES work_orders(id),
-    created_by INTEGER REFERENCES users(id),
-    assigned_to INTEGER REFERENCES employees(id),
-    status VARCHAR(20) DEFAULT 'open',
-    priority VARCHAR(10) DEFAULT 'normal',
-    title VARCHAR(200) NOT NULL,
-    description TEXT,
-    resolution TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP,
-
-    CONSTRAINT check_ticket_status CHECK (status IN ('open', 'in_progress', 'resolved', 'closed', 'cancelled')),
-    CONSTRAINT check_ticket_priority CHECK (priority IN ('low', 'normal', 'high', 'urgent'))
-);
-
-CREATE INDEX idx_tickets_number ON tickets(ticket_number);
-CREATE INDEX idx_tickets_status ON tickets(status);
-CREATE INDEX idx_tickets_work_order ON tickets(work_order_id);
-CREATE INDEX idx_tickets_assigned_to ON tickets(assigned_to);
-CREATE INDEX idx_tickets_created_at ON tickets(created_at DESC);
-
--- ============================================
--- WORK ORDERS
--- ============================================
-
-CREATE TABLE work_orders (
-    id SERIAL PRIMARY KEY,
-    work_order_number VARCHAR(50) UNIQUE NOT NULL, -- Format: WO-YYYYMMDD-HHMMSS
-    created_by INTEGER REFERENCES users(id) NOT NULL,
-    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'in_progress', 'completed', 'cancelled'
-    priority VARCHAR(10) DEFAULT 'normal', -- 'low', 'normal', 'high', 'urgent'
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP,
-
-    CONSTRAINT check_status CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
-    CONSTRAINT check_priority CHECK (priority IN ('low', 'normal', 'high', 'urgent'))
-);
-
-CREATE INDEX idx_work_orders_number ON work_orders(work_order_number);
-CREATE INDEX idx_work_orders_status ON work_orders(status);
-CREATE INDEX idx_work_orders_created_by ON work_orders(created_by);
-CREATE INDEX idx_work_orders_created_at ON work_orders(created_at DESC);
-
--- ============================================
--- FORWARD SIMULATIONS (正向仿真)
--- ============================================
-
-CREATE TABLE forward_simulations (
-    id SERIAL PRIMARY KEY,
-    work_order_id INTEGER REFERENCES work_orders(id),
-    user_id INTEGER REFERENCES users(id) NOT NULL,
-    employee_id INTEGER REFERENCES employees(id), -- Test operator
-
-    -- Input Parameters
-    igniter_type_id INTEGER REFERENCES igniter_types(id),
-    nc_type1_id INTEGER REFERENCES nc_types1(id),
-    nc_amount1 DECIMAL(10, 4), -- NC用量1 (mg)
-    nc_type2_id INTEGER REFERENCES nc_types2(id),
-    nc_amount2 DECIMAL(10, 4), -- NC用量2 (mg)
-    gp_type_id INTEGER REFERENCES gp_types(id),
-    gp_amount DECIMAL(10, 4),
-    shell_type_id INTEGER REFERENCES shell_types(id),
-    current_type_id INTEGER REFERENCES current_types(id),
-    sensor_type_id INTEGER REFERENCES sensor_types(id),
-    volume_type_id INTEGER REFERENCES volume_types(id),
-    test_device_id INTEGER REFERENCES test_devices(id),
-
-    -- Model Information
-    model_version VARCHAR(50),
-    num_models INTEGER, -- Number of time-point models used
-    r_squared DECIMAL(10, 8),
-
-    -- Simulation Results
-    peak_pressure DECIMAL(10, 4), -- MPa
-    peak_time DECIMAL(10, 4), -- ms
-    num_data_points INTEGER,
-
+CREATE TABLE recipe (
+    id                  INTEGER     NOT NULL,
+    user_id             INTEGER     NOT NULL,
+    
+    -- Test Parameters (complete parameter combination)
+    ignition_model      VARCHAR(50),         -- 点火具型号
+    nc_type_1           VARCHAR(50),         -- NC类型1
+    nc_usage_1          FLOAT,               -- NC用量1 (毫克)
+    nc_type_2           VARCHAR(50),         -- NC类型2
+    nc_usage_2          FLOAT,               -- NC用量2 (毫克)
+    gp_type             VARCHAR(50),         -- GP类型
+    gp_usage            FLOAT,               -- GP用量 (毫克)
+    shell_model         VARCHAR(50),         -- 管壳高度 (mm)
+    current_condition   VARCHAR(50),         -- 通电条件
+    sensor_range        VARCHAR(50),         -- 传感器量程
+    body_model          VARCHAR(50),         -- 容积
+    equipment           VARCHAR(50),         -- 测试设备
+    
     -- Metadata
-    simulation_type VARCHAR(20) DEFAULT 'forward',
-    status VARCHAR(20) DEFAULT 'completed', -- 'running', 'completed', 'failed'
-    execution_time DECIMAL(10, 4), -- seconds
-    error_message TEXT,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT check_simulation_type CHECK (simulation_type IN ('forward', 'reverse')),
-    CONSTRAINT check_status CHECK (status IN ('running', 'completed', 'failed'))
+    recipe_name         VARCHAR(200),        -- Optional friendly name
+    description         TEXT,
+    created_at          DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES user(id)
 );
 
-CREATE INDEX idx_forward_sim_user ON forward_simulations(user_id);
-CREATE INDEX idx_forward_sim_work_order ON forward_simulations(work_order_id);
-CREATE INDEX idx_forward_sim_created_at ON forward_simulations(created_at DESC);
-CREATE INDEX idx_forward_sim_nc_amount ON forward_simulations(nc_amount);
+CREATE INDEX idx_recipe_user ON recipe(user_id);
+CREATE INDEX idx_recipe_created ON recipe(created_at);
+
 
 -- ============================================
--- SIMULATION TIME SERIES DATA
+-- WORK ORDERS (Links Recipes with Tests)
+-- ============================================
+
+CREATE TABLE work_order (
+    id                  INTEGER     NOT NULL,
+    work_order_number   VARCHAR(50) NOT NULL UNIQUE,
+    recipe_id           INTEGER     NOT NULL,
+    user_id             INTEGER     NOT NULL,
+    
+    -- Metadata
+    employee_id         VARCHAR(100),        -- 工号
+    test_name           VARCHAR(200),        -- 测试名称
+    notes               TEXT,
+    test_date           DATE,
+    test_time           VARCHAR(10),
+    
+    -- Status tracking
+    source              VARCHAR(20) DEFAULT 'simulation',  -- 'simulation' | 'experiment'
+    status              VARCHAR(20) DEFAULT 'pending',     -- 'pending' | 'in_progress' | 'completed' | 'cancelled'
+    priority            VARCHAR(10) DEFAULT 'normal',      -- 'low' | 'normal' | 'high' | 'urgent'
+    
+    created_at          DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    completed_at        DATETIME,
+    
+    PRIMARY KEY (id),
+    FOREIGN KEY (recipe_id) REFERENCES recipe(id),
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    CHECK (source IN ('simulation', 'experiment')),
+    CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+    CHECK (priority IN ('low', 'normal', 'high', 'urgent'))
+);
+
+CREATE UNIQUE INDEX idx_work_order_number ON work_order(work_order_number);
+CREATE INDEX idx_work_order_recipe ON work_order(recipe_id);
+CREATE INDEX idx_work_order_user ON work_order(user_id);
+CREATE INDEX idx_work_order_status ON work_order(status);
+CREATE INDEX idx_work_order_created ON work_order(created_at);
+
+
+-- ============================================
+-- SIMULATIONS (Forward Predictions)
+-- ============================================
+
+CREATE TABLE simulation (
+    id              INTEGER     NOT NULL,
+    user_id         INTEGER     NOT NULL,
+    work_order_id   INTEGER,
+    
+    -- Test Parameters (denormalized for quick display)
+    ignition_model  VARCHAR(50),
+    nc_type_1       VARCHAR(50),
+    nc_usage_1      FLOAT,
+    nc_type_2       VARCHAR(50),
+    nc_usage_2      FLOAT,
+    gp_type         VARCHAR(50),
+    gp_usage        FLOAT,
+    shell_model     VARCHAR(50),
+    current         FLOAT,
+    sensor_model    VARCHAR(50),
+    body_model      VARCHAR(50),
+    equipment       VARCHAR(50),
+    
+    -- Test Metadata
+    employee_id     VARCHAR(100),
+    test_name       VARCHAR(200),
+    notes           TEXT,
+    
+    -- Results Summary (detailed data in simulation_time_series)
+    peak_pressure   FLOAT,                  -- Maximum pressure reached
+    peak_time       FLOAT,                  -- Time of peak pressure
+    model_version   VARCHAR(50),            -- Model/algorithm version used
+    num_data_points INTEGER,                -- Number of time series points
+    r_squared       FLOAT,                  -- Model fit quality (0-1)
+    
+    -- Output Files
+    chart_image     VARCHAR(255),           -- Path to generated chart
+    
+    -- Status
+    status          VARCHAR(20) DEFAULT 'completed',
+    execution_time  FLOAT,                  -- Seconds
+    error_message   TEXT,
+    
+    created_at      DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    FOREIGN KEY (work_order_id) REFERENCES work_order(id),
+    CHECK (status IN ('running', 'completed', 'failed'))
+);
+
+CREATE INDEX idx_simulation_user ON simulation(user_id);
+CREATE INDEX idx_simulation_work_order ON simulation(work_order_id);
+CREATE INDEX idx_simulation_created ON simulation(created_at);
+CREATE INDEX idx_simulation_user_created ON simulation(user_id, created_at);
+
+
+-- ============================================
+-- SIMULATION TIME SERIES (Separated for Performance)
 -- ============================================
 
 CREATE TABLE simulation_time_series (
-    id SERIAL PRIMARY KEY,
-    simulation_id INTEGER REFERENCES forward_simulations(id) ON DELETE CASCADE,
-    time_point DECIMAL(10, 6), -- ms
-    pressure DECIMAL(10, 6), -- MPa
-    sequence_number INTEGER, -- For ordering
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id              INTEGER     NOT NULL,
+    simulation_id   INTEGER     NOT NULL,
+    
+    time_point      FLOAT       NOT NULL,   -- Time in milliseconds
+    pressure        FLOAT       NOT NULL,   -- Pressure value
+    sequence_number INTEGER,                -- Order in sequence (1, 2, 3, ...)
+    
+    created_at      DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (id),
+    FOREIGN KEY (simulation_id) REFERENCES simulation(id) ON DELETE CASCADE
 );
 
+-- Critical indexes for efficient querying
 CREATE INDEX idx_sim_ts_simulation ON simulation_time_series(simulation_id);
-CREATE INDEX idx_sim_ts_sequence ON simulation_time_series(simulation_id, sequence_number);
+CREATE INDEX idx_sim_ts_simulation_seq ON simulation_time_series(simulation_id, sequence_number);
+CREATE INDEX idx_sim_ts_simulation_time ON simulation_time_series(simulation_id, time_point);
+
 
 -- ============================================
--- REVERSE SIMULATIONS (逆向仿真)
+-- TEST RESULTS (Experimental Data)
 -- ============================================
 
-CREATE TABLE reverse_simulations (
-    id SERIAL PRIMARY KEY,
-    work_order_id INTEGER REFERENCES work_orders(id),
-    user_id INTEGER REFERENCES users(id) NOT NULL,
-    employee_id INTEGER REFERENCES employees(id), -- Test operator
-
-    -- Input Parameters
-    igniter_type_id INTEGER REFERENCES igniter_types(id),
-    shell_type_id INTEGER REFERENCES shell_types(id),
-    current_type_id INTEGER REFERENCES current_types(id),
-    sensor_type_id INTEGER REFERENCES sensor_types(id),
-    volume_type_id INTEGER REFERENCES volume_types(id),
-    test_device_id INTEGER REFERENCES test_devices(id),
-
-    -- Uploaded Pressure Data Reference
-    pressure_data_file VARCHAR(255), -- Path to uploaded file
-
-    -- Prediction Results
-    predicted_nc_type1_id INTEGER REFERENCES nc_types1(id),
-    predicted_nc_amount1 DECIMAL(10, 4),
-    predicted_nc_type2_id INTEGER REFERENCES nc_types2(id),
-    predicted_nc_amount2 DECIMAL(10, 4),
-    predicted_gp_type_id INTEGER REFERENCES gp_types(id),
-    predicted_gp_amount DECIMAL(10, 4),
-    confidence_score DECIMAL(5, 2), -- 0-100%
-
-    -- Metadata
-    model_version VARCHAR(50),
-    status VARCHAR(20) DEFAULT 'completed',
-    execution_time DECIMAL(10, 4),
-    error_message TEXT,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT check_status CHECK (status IN ('running', 'completed', 'failed'))
+CREATE TABLE test_result (
+    id              INTEGER     NOT NULL,
+    user_id         INTEGER     NOT NULL,
+    work_order_id   INTEGER,
+    simulation_id   INTEGER,                -- Optional link to simulation for comparison
+    
+    -- File Info
+    filename        VARCHAR(255) NOT NULL,
+    file_path       VARCHAR(500) NOT NULL,
+    file_size       INTEGER,
+    
+    -- Test Metadata
+    test_date       DATE,
+    tester_id       VARCHAR(50),
+    notes           TEXT,
+    
+    -- Results Summary (detailed data in test_time_series)
+    peak_pressure   FLOAT,
+    peak_time       FLOAT,
+    num_data_points INTEGER,
+    
+    uploaded_at     DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    FOREIGN KEY (work_order_id) REFERENCES work_order(id),
+    FOREIGN KEY (simulation_id) REFERENCES simulation(id)
 );
 
-CREATE INDEX idx_reverse_sim_user ON reverse_simulations(user_id);
-CREATE INDEX idx_reverse_sim_work_order ON reverse_simulations(work_order_id);
-CREATE INDEX idx_reverse_sim_created_at ON reverse_simulations(created_at DESC);
+CREATE INDEX idx_test_result_user ON test_result(user_id);
+CREATE INDEX idx_test_result_work_order ON test_result(work_order_id);
+CREATE INDEX idx_test_result_simulation ON test_result(simulation_id);
+
 
 -- ============================================
--- TEST RESULTS (实验结果)
--- ============================================
-
-CREATE TABLE test_results (
-    id SERIAL PRIMARY KEY,
-    work_order_id INTEGER REFERENCES work_orders(id),
-    user_id INTEGER REFERENCES users(id) NOT NULL,
-    tester_id VARCHAR(50), -- Employee ID
-    test_device_id INTEGER REFERENCES test_devices(id),
-    test_date DATE NOT NULL,
-    notes TEXT,
-
-    -- Metadata
-    status VARCHAR(20) DEFAULT 'submitted',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT check_status CHECK (status IN ('submitted', 'validated', 'archived'))
-);
-
-CREATE INDEX idx_test_results_work_order ON test_results(work_order_id);
-CREATE INDEX idx_test_results_user ON test_results(user_id);
-CREATE INDEX idx_test_results_date ON test_results(test_date DESC);
-CREATE INDEX idx_test_results_device ON test_results(test_device_id);
-
--- ============================================
--- TEST RESULT FILES
--- ============================================
-
-CREATE TABLE test_result_files (
-    id SERIAL PRIMARY KEY,
-    test_result_id INTEGER REFERENCES test_results(id) ON DELETE CASCADE,
-    file_name VARCHAR(255) NOT NULL,
-    file_path VARCHAR(500) NOT NULL,
-    file_size BIGINT, -- bytes
-    file_type VARCHAR(50), -- 'xlsx', 'csv', etc.
-    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_test_files_result ON test_result_files(test_result_id);
-
--- ============================================
--- TEST TIME SERIES DATA
+-- TEST TIME SERIES (Separated for Performance)
 -- ============================================
 
 CREATE TABLE test_time_series (
-    id SERIAL PRIMARY KEY,
-    test_result_id INTEGER REFERENCES test_results(id) ON DELETE CASCADE,
-    file_id INTEGER REFERENCES test_result_files(id),
-    time_point DECIMAL(10, 6), -- ms
-    pressure DECIMAL(10, 6), -- MPa
+    id              INTEGER     NOT NULL,
+    test_result_id  INTEGER     NOT NULL,
+    
+    time_point      FLOAT       NOT NULL,
+    pressure        FLOAT       NOT NULL,
     sequence_number INTEGER,
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    
+    created_at      DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (id),
+    FOREIGN KEY (test_result_id) REFERENCES test_result(id) ON DELETE CASCADE
 );
 
+-- Critical indexes for efficient querying
 CREATE INDEX idx_test_ts_result ON test_time_series(test_result_id);
-CREATE INDEX idx_test_ts_file ON test_time_series(file_id);
-CREATE INDEX idx_test_ts_sequence ON test_time_series(test_result_id, sequence_number);
+CREATE INDEX idx_test_ts_result_seq ON test_time_series(test_result_id, sequence_number);
+CREATE INDEX idx_test_ts_result_time ON test_time_series(test_result_id, time_point);
+
 
 -- ============================================
--- COMPARISONS (PT曲线对比)
+-- EXPERIMENT FILES (Raw Uploads)
 -- ============================================
 
-CREATE TABLE pt_comparisons (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) NOT NULL,
-    simulation_id INTEGER REFERENCES forward_simulations(id),
-    test_result_id INTEGER REFERENCES test_results(id),
+CREATE TABLE experiment_file (
+    id                  INTEGER     NOT NULL,
+    work_order_id       INTEGER     NOT NULL,
+    user_id             INTEGER     NOT NULL,
+    
+    original_filename   VARCHAR(255) NOT NULL,
+    stored_filename     VARCHAR(255) NOT NULL,   -- UUID-based name on disk
+    file_path           VARCHAR(500) NOT NULL,
+    file_size           INTEGER,
+    file_type           VARCHAR(50),             -- 'xlsx', 'csv', etc.
+    
+    -- Processing status
+    processed           BOOLEAN     DEFAULT 0,
+    test_result_id      INTEGER,                 -- Link to parsed result
+    
+    uploaded_at         DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (id),
+    FOREIGN KEY (work_order_id) REFERENCES work_order(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    FOREIGN KEY (test_result_id) REFERENCES test_result(id)
+);
 
+CREATE INDEX idx_experiment_file_work_order ON experiment_file(work_order_id);
+CREATE INDEX idx_experiment_file_user ON experiment_file(user_id);
+
+
+-- ============================================
+-- PT COMPARISONS (Simulation vs Experimental)
+-- ============================================
+
+CREATE TABLE pt_comparison (
+    id                  INTEGER     NOT NULL,
+    user_id             INTEGER     NOT NULL,
+    simulation_id       INTEGER     NOT NULL,
+    test_result_id      INTEGER     NOT NULL,
+    
     -- Comparison Metrics
-    peak_pressure_diff DECIMAL(10, 4), -- MPa
-    peak_time_diff DECIMAL(10, 4), -- ms
-    rmse DECIMAL(10, 6), -- Root Mean Square Error
-    correlation DECIMAL(10, 8), -- Correlation coefficient
-
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    peak_pressure_diff  FLOAT,               -- |sim_peak - test_peak|
+    peak_time_diff      FLOAT,               -- |sim_peak_time - test_peak_time|
+    rmse                FLOAT,               -- Root Mean Square Error
+    mae                 FLOAT,               -- Mean Absolute Error
+    correlation         FLOAT,               -- Pearson correlation coefficient (-1 to 1)
+    r_squared           FLOAT,               -- R² fit quality (0 to 1)
+    
+    notes               TEXT,
+    created_at          DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (id),
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    FOREIGN KEY (simulation_id) REFERENCES simulation(id),
+    FOREIGN KEY (test_result_id) REFERENCES test_result(id)
 );
 
-CREATE INDEX idx_comparisons_user ON pt_comparisons(user_id);
-CREATE INDEX idx_comparisons_simulation ON pt_comparisons(simulation_id);
-CREATE INDEX idx_comparisons_test ON pt_comparisons(test_result_id);
-CREATE INDEX idx_comparisons_created_at ON pt_comparisons(created_at DESC);
+CREATE INDEX idx_pt_comp_simulation ON pt_comparison(simulation_id);
+CREATE INDEX idx_pt_comp_test_result ON pt_comparison(test_result_id);
+CREATE INDEX idx_pt_comp_user ON pt_comparison(user_id);
+
 
 -- ============================================
--- OPERATION LOGS (操作日志)
+-- INDEXES SUMMARY
 -- ============================================
-
-CREATE TABLE operation_logs (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    log_type VARCHAR(20) NOT NULL, -- 'login', 'simulation', 'upload', 'download', 'comparison', 'work_order', 'navigation'
-    action VARCHAR(100) NOT NULL,
-    details TEXT,
-    ip_address INET,
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT check_log_type CHECK (log_type IN ('login', 'simulation', 'upload', 'download', 'comparison', 'work_order', 'navigation', 'admin'))
-);
-
-CREATE INDEX idx_logs_user ON operation_logs(user_id);
-CREATE INDEX idx_logs_type ON operation_logs(log_type);
-CREATE INDEX idx_logs_created_at ON operation_logs(created_at DESC);
-CREATE INDEX idx_logs_user_type ON operation_logs(user_id, log_type);
-
+-- 
+-- Primary indexes (automatic):
+--   - All PRIMARY KEY columns
+--   - All UNIQUE constraints
+--
+-- Custom indexes created:
+--   - User: employee_id, email, role
+--   - Recipe: user_id, created_at
+--   - WorkOrder: number (unique), recipe_id, user_id, status, created_at
+--   - Simulation: user_id, work_order_id, created_at, (user_id, created_at)
+--   - SimulationTimeSeries: simulation_id, (simulation_id, sequence), (simulation_id, time)
+--   - TestResult: user_id, work_order_id, simulation_id
+--   - TestTimeSeries: test_result_id, (test_result_id, sequence), (test_result_id, time)
+--   - ExperimentFile: work_order_id, user_id
+--   - PTComparison: simulation_id, test_result_id, user_id
+--
+-- Total: 8 tables, 29 indexes (including PKs)
 -- ============================================
--- PARQUET ARCHIVE TRACKING
--- ============================================
-
-CREATE TABLE archive_batches (
-    id SERIAL PRIMARY KEY,
-    batch_name VARCHAR(100) UNIQUE NOT NULL,
-    table_name VARCHAR(50) NOT NULL,
-    start_date TIMESTAMP NOT NULL,
-    end_date TIMESTAMP NOT NULL,
-    row_count BIGINT,
-    parquet_file_path VARCHAR(500),
-    parquet_file_size BIGINT,
-    compression_type VARCHAR(20) DEFAULT 'snappy',
-    archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    archived_by INTEGER REFERENCES users(id),
-
-    -- Status
-    status VARCHAR(20) DEFAULT 'completed', -- 'in_progress', 'completed', 'failed'
-    checksum VARCHAR(64), -- SHA256 hash for verification
-
-    CONSTRAINT check_status CHECK (status IN ('in_progress', 'completed', 'failed'))
-);
-
-CREATE INDEX idx_archive_table ON archive_batches(table_name);
-CREATE INDEX idx_archive_dates ON archive_batches(start_date, end_date);
-CREATE INDEX idx_archive_status ON archive_batches(status);
-
--- ============================================
--- MODEL VERSIONS
--- ============================================
-
-CREATE TABLE model_versions (
-    id SERIAL PRIMARY KEY,
-    version_name VARCHAR(50) UNIQUE NOT NULL,
-    model_type VARCHAR(20) NOT NULL, -- 'forward', 'reverse'
-    file_path VARCHAR(500) NOT NULL,
-    num_models INTEGER, -- Number of models in ensemble
-    training_date DATE,
-    r_squared DECIMAL(10, 8),
-    description TEXT,
-    is_active BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by INTEGER REFERENCES users(id),
-
-    CONSTRAINT check_model_type CHECK (model_type IN ('forward', 'reverse'))
-);
-
-CREATE INDEX idx_model_versions_type ON model_versions(model_type);
-CREATE INDEX idx_model_versions_active ON model_versions(is_active);
-
--- ============================================
--- DATA RETENTION POLICIES
--- ============================================
-
-CREATE TABLE retention_policies (
-    id SERIAL PRIMARY KEY,
-    table_name VARCHAR(50) UNIQUE NOT NULL,
-    retention_days INTEGER NOT NULL, -- Days to keep in hot PostgreSQL
-    archive_enabled BOOLEAN DEFAULT true,
-    delete_after_archive BOOLEAN DEFAULT true,
-    last_cleanup_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Insert default retention policies
-INSERT INTO retention_policies (table_name, retention_days, archive_enabled) VALUES
-('operation_logs', 90, true),
-('simulation_time_series', 180, true),
-('test_time_series', 365, true),
-('forward_simulations', 365, false),
-('reverse_simulations', 365, false),
-('test_results', 730, false);
-
--- ============================================
--- TRIGGERS FOR UPDATED_AT
--- ============================================
-
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_work_orders_updated_at BEFORE UPDATE ON work_orders
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_test_results_updated_at BEFORE UPDATE ON test_results
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- ============================================
--- VIEWS FOR COMMON QUERIES
--- ============================================
-
--- Active simulations with user info
-CREATE VIEW v_active_simulations AS
-SELECT
-    fs.id,
-    wo.work_order_number,
-    u.username,
-    u.full_name,
-    fs.nc_amount,
-    fs.peak_pressure,
-    fs.peak_time,
-    fs.created_at
-FROM forward_simulations fs
-JOIN users u ON fs.user_id = u.id
-LEFT JOIN work_orders wo ON fs.work_order_id = wo.id
-WHERE fs.status = 'completed'
-ORDER BY fs.created_at DESC;
-
--- Test results summary
-CREATE VIEW v_test_results_summary AS
-SELECT
-    tr.id,
-    wo.work_order_number,
-    u.username,
-    tr.tester_id,
-    td.device_name,
-    tr.test_date,
-    COUNT(trf.id) as file_count,
-    tr.created_at
-FROM test_results tr
-JOIN users u ON tr.user_id = u.id
-LEFT JOIN work_orders wo ON tr.work_order_id = wo.id
-LEFT JOIN test_devices td ON tr.test_device_id = td.id
-LEFT JOIN test_result_files trf ON tr.id = trf.test_result_id
-GROUP BY tr.id, wo.work_order_number, u.username, tr.tester_id, td.device_name, tr.test_date, tr.created_at
-ORDER BY tr.created_at DESC;
-
--- ============================================
--- COMMENTS
--- ============================================
-
-COMMENT ON TABLE users IS 'System users with authentication and role-based access';
-COMMENT ON TABLE work_orders IS 'Work orders linking simulations and tests';
-COMMENT ON TABLE forward_simulations IS 'Forward simulations (正向仿真) predicting PT curves';
-COMMENT ON TABLE reverse_simulations IS 'Reverse simulations (逆向仿真) predicting formulation';
-COMMENT ON TABLE test_results IS 'Experimental test results (实验结果)';
-COMMENT ON TABLE pt_comparisons IS 'PT curve comparisons between simulation and test data';
-COMMENT ON TABLE operation_logs IS 'Complete audit trail of all user operations';
-COMMENT ON TABLE archive_batches IS 'Tracking for data archived to Parquet files';
-COMMENT ON TABLE retention_policies IS 'Data retention and archival policies';
