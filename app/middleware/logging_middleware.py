@@ -4,7 +4,7 @@ import uuid
 import traceback as tb
 from flask import request, g
 from flask_login import current_user
-from functools import wraps
+from werkzeug.exceptions import HTTPException
 from app.config.logging_config import (
     LOG_EVENTS,
     SLOW_REQUEST_THRESHOLD_MS,
@@ -122,7 +122,12 @@ def init_logging_middleware(app):
 
     @app.errorhandler(Exception)
     def log_unhandled_exception(error):
-        """Log unhandled exceptions"""
+        """Log unhandled exceptions (true server errors only, not HTTP 4xx/5xx)."""
+        # HTTPException subclasses (400 CSRFError, 404, etc.) are expected
+        # responses, not crashes — let Flask render them normally.
+        if isinstance(error, HTTPException):
+            return error
+
         try:
             # Get user info
             username = current_user.username if current_user.is_authenticated else None
@@ -159,46 +164,6 @@ def init_logging_middleware(app):
     )
 
     app.logger.info('Request logging middleware initialized')
-
-
-def log_action(action: str, message: str = None, **kwargs):
-    """
-    Decorator to log specific actions.
-
-    Usage:
-        @log_action('user_login', 'User logged in successfully')
-        def login():
-            ...
-
-    Args:
-        action: Action name
-        message: Log message (optional, will use action if not provided)
-        **kwargs: Additional log parameters
-    """
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **inner_kwargs):
-            result = f(*args, **inner_kwargs)
-
-            # Get user info if authenticated
-            username = current_user.username if current_user.is_authenticated else None
-            user_id = current_user.id if current_user.is_authenticated else None
-
-            # Log the action
-            log_manager.log_info(
-                message=message or action,
-                action=action,
-                username=username,
-                user_id=user_id,
-                ip_address=request.remote_addr if request else None,
-                **kwargs
-            )
-
-            return result
-
-        return decorated_function
-    return decorator
-
 
 def log_user_login(username: str, user_id: int, ip_address: str, success: bool = True):
     """

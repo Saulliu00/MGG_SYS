@@ -17,14 +17,6 @@ CONNECTION_POOL = {
     'keepalive_timeout': 5,         # Keepalive timeout in seconds
 }
 
-# Rate limiting (optional - can be enabled if needed)
-RATE_LIMIT = {
-    'enabled': False,                # Set to True to enable rate limiting
-    'default': '100 per minute',     # Default rate limit
-    'simulation': '10 per minute',   # Simulation endpoint rate limit
-    'upload': '20 per minute',       # Upload endpoint rate limit
-}
-
 # CORS settings for local network access
 CORS_CONFIG = {
     'origins': os.environ.get('CORS_ORIGINS', '*'),  # Allow all origins by default for local network
@@ -45,14 +37,17 @@ SESSION_CONFIG = {
 }
 
 # Worker configuration for multi-user access
+# Target: 100 concurrent users
+# Formula: workers × threads = total concurrent handlers
+# On 4-core Pi: 5 workers × 5 threads = 25 handlers (< pool_size=25, no contention)
 WORKER_CONFIG = {
-    'workers': os.cpu_count() * 2 + 1,  # Number of worker processes
-    'threads': 4,                        # Threads per worker
-    'worker_class': 'sync',             # Worker class (sync, gevent, eventlet)
-    'max_requests': 1000,               # Max requests per worker before restart
-    'max_requests_jitter': 50,          # Random jitter to prevent all workers restarting simultaneously
-    'timeout': 30,                      # Worker timeout
-    'graceful_timeout': 30,             # Graceful shutdown timeout
+    'workers': min(os.cpu_count() + 1, 5),  # Cap at 5 workers to stay within pool_size
+    'threads': 5,                            # 5 threads per worker → 25 total handlers max
+    'worker_class': 'sync',                  # Worker class (sync, gevent, eventlet)
+    'max_requests': 1000,                    # Max requests per worker before restart
+    'max_requests_jitter': 50,               # Random jitter to prevent all workers restarting simultaneously
+    'timeout': 120,                          # Worker timeout (covers simulation subprocess calls)
+    'graceful_timeout': 30,                  # Graceful shutdown timeout
 }
 
 # Request size limits

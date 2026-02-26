@@ -1,0 +1,514 @@
+{% extends "base.html" %}
+
+{% block title %}系统监控 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+
+    {# Page header #}
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="fas fa-heartbeat"></i> 系统监控</h2>
+                <p class="text-muted mb-0">实时系统健康与安全状态 &mdash; 生成于 {{ metrics.generated_at }}</p>
+            </div>
+            <button class="btn btn-outline-primary" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> 刷新
+            </button>
+        </div>
+    </div>
+
+    {# ── 1. System Resources ────────────────────────────────────────── #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-server"></i> 系统资源</h5>
+                </div>
+                <div class="card-body">
+                    {% if metrics.resources is mapping and metrics.resources.get('error') %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> 无法获取资源信息：{{ metrics.resources.error }}
+                        </div>
+                    {% else %}
+                        {% set r = metrics.resources %}
+                        <div class="row g-3">
+
+                            {# CPU #}
+                            {% set cpu = r.cpu_percent %}
+                            {% set cpu_cls = 'bg-success' if cpu < 70 else ('bg-warning' if cpu < 90 else 'bg-danger') %}
+                            <div class="col-md-3">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted">CPU 使用率</h6>
+                                        <h3 class="mb-2">{{ cpu }}%</h3>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar {{ cpu_cls }}" style="width: {{ cpu }}%;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {# RAM % #}
+                            {% set mem_pct = r.memory_percent %}
+                            {% set mem_cls = 'bg-success' if mem_pct < 70 else ('bg-warning' if mem_pct < 90 else 'bg-danger') %}
+                            <div class="col-md-3">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted">内存使用率</h6>
+                                        <h3 class="mb-2">{{ mem_pct }}%</h3>
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar {{ mem_cls }}" style="width: {{ mem_pct }}%;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {# RAM used #}
+                            <div class="col-md-3">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted">内存已用</h6>
+                                        <h3 class="mb-1">{{ r.memory_used_mb }} <small class="fs-6 text-muted">MB</small></h3>
+                                        <small class="text-muted">共 {{ r.memory_total_mb }} MB</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {# RAM available #}
+                            <div class="col-md-3">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted">内存可用</h6>
+                                        <h3 class="mb-1">{{ r.memory_available_mb }} <small class="fs-6 text-muted">MB</small></h3>
+                                        <small class="text-muted">剩余空闲</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── 2. Disk Space ──────────────────────────────────────────────── #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-hdd"></i> 磁盘空间</h5>
+                </div>
+                <div class="card-body">
+                    {% if metrics.disk is mapping and metrics.disk.get('error') %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> 无法获取磁盘信息：{{ metrics.disk.error }}
+                        </div>
+                    {% else %}
+                        {% set d = metrics.disk %}
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted"><i class="fas fa-database text-primary"></i> 数据库文件</h6>
+                                        <h3 class="mb-0">{{ d.db_size_mb }} <small class="fs-6 text-muted">MB</small></h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted"><i class="fas fa-folder-open text-warning"></i> 上传文件夹</h6>
+                                        <h3 class="mb-0">{{ d.uploads_size_mb }} <small class="fs-6 text-muted">MB</small></h3>
+                                        <small class="text-muted">{{ d.uploads_file_count }} 个文件</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted"><i class="fas fa-archive text-success"></i> 备份文件夹</h6>
+                                        <h3 class="mb-0">{{ d.backups_size_mb }} <small class="fs-6 text-muted">MB</small></h3>
+                                        <small class="text-muted">{{ d.backups_file_count }} 个备份</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── 3. Database Stats ──────────────────────────────────────────── #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> 数据库统计</h5>
+                </div>
+                <div class="card-body">
+                    {% if metrics.db is mapping and metrics.db.get('error') %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> 无法获取数据库信息：{{ metrics.db.error }}
+                        </div>
+                    {% else %}
+                        {% set db = metrics.db %}
+                        <div class="row">
+                            <div class="col-md-5">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span class="text-muted">文件大小</span>
+                                        <strong>{{ db.file_size_mb }} MB</strong>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span class="text-muted">备份数量</span>
+                                        <strong>{{ db.backup_count }}</strong>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span class="text-muted">最近备份</span>
+                                        <strong>{{ db.latest_backup_date or '无备份' }}</strong>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="col-md-7">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>数据表</th>
+                                            <th class="text-end">行数</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for table_name, count in db.table_counts.items() %}
+                                        <tr>
+                                            <td><code>{{ table_name }}</code></td>
+                                            <td class="text-end">{{ count }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── 4. Today's Requests ────────────────────────────────────────── #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> 今日请求统计</h5>
+                </div>
+                <div class="card-body">
+                    {% if metrics.requests is mapping and metrics.requests.get('error') %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> 无法获取请求统计：{{ metrics.requests.error }}
+                        </div>
+                    {% else %}
+                        {% set req = metrics.requests %}
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted">总请求数</h6>
+                                        <h3 class="mb-0">{{ req.total_requests }}</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted">错误请求</h6>
+                                        <h3 class="mb-0">
+                                            {{ req.error_count }}
+                                            {% if req.error_count > 0 %}
+                                                <span class="badge bg-danger fs-6">{{ req.error_rate_percent }}%</span>
+                                            {% endif %}
+                                        </h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted">慢请求</h6>
+                                        <h3 class="mb-0">
+                                            {{ req.slow_request_count }}
+                                            {% if req.slow_request_count > 0 %}
+                                                <span class="badge bg-warning text-dark fs-6">慢</span>
+                                            {% endif %}
+                                        </h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── 5. Software Crashes ────────────────────────────────────────── #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-bug"></i> 软件异常
+                        {% if metrics.crashes is not mapping and metrics.crashes | length > 0 %}
+                            <span class="badge bg-danger ms-2">{{ metrics.crashes | length }}</span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if metrics.crashes is mapping and metrics.crashes.get('error') %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> 无法获取异常日志：{{ metrics.crashes.error }}
+                        </div>
+                    {% elif not metrics.crashes %}
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-check-circle text-success fa-2x"></i>
+                            <p class="mt-2 mb-0">今日无异常</p>
+                        </div>
+                    {% else %}
+                        <div style="max-height: 350px; overflow-y: auto;">
+                            {% for entry in metrics.crashes %}
+                            <div class="log-entry level-{{ entry.level }}">
+                                <div class="log-entry-header">
+                                    <div>
+                                        <span class="log-entry-level level-{{ entry.level }}">{{ entry.level }}</span>
+                                        {% if entry.username %}
+                                            <span class="badge bg-secondary ms-2"><i class="fas fa-user"></i> {{ entry.username }}</span>
+                                        {% endif %}
+                                    </div>
+                                    <span class="log-entry-timestamp">{{ entry.time }}</span>
+                                </div>
+                                <div class="log-entry-message">{{ entry.message }}</div>
+                                <div class="log-entry-details">
+                                    {% if entry.path %}<span class="me-2">路径: {{ entry.path }}</span>{% endif %}
+                                </div>
+                                {% if entry.error %}
+                                <div class="log-entry-error">{{ entry.error }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── 6. Access Failures ─────────────────────────────────────────── #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-shield-alt"></i> 访问失败 / 暴力破解检测</h5>
+                </div>
+                <div class="card-body">
+                    {% if metrics.access_failures is mapping and metrics.access_failures.get('error') %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> 无法获取访问记录：{{ metrics.access_failures.error }}
+                        </div>
+                    {% else %}
+                        {% set af = metrics.access_failures %}
+                        <div class="row">
+
+                            {# Left: summary #}
+                            <div class="col-md-4">
+                                <ul class="list-group list-group-flush mb-3">
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span class="text-muted">今日失败登录</span>
+                                        <strong>{{ af.total_failures }}</strong>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span class="text-muted">疑似暴力破解 IP</span>
+                                        {% if af.flagged_ips %}
+                                            <span class="badge bg-danger">{{ af.flagged_ips | length }}</span>
+                                        {% else %}
+                                            <span class="badge bg-success">0</span>
+                                        {% endif %}
+                                    </li>
+                                </ul>
+
+                                {% if af.flagged_ips %}
+                                <div class="alert alert-danger py-2">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> 被标记 IP</strong>
+                                    <table class="table table-sm table-borderless mb-0 mt-1">
+                                        <tbody>
+                                            {% for item in af.flagged_ips %}
+                                            <tr>
+                                                <td><code>{{ item.ip }}</code></td>
+                                                <td class="text-end text-danger fw-bold">{{ item.count }} 次</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            {# Right: recent failures #}
+                            <div class="col-md-8">
+                                <h6 class="text-muted mb-2">最近 10 次失败记录</h6>
+                                {% if af.recent_failures %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>时间</th>
+                                                <th>IP 地址</th>
+                                                <th>用户名</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for row in af.recent_failures %}
+                                            <tr>
+                                                <td class="font-monospace">{{ row.time }}</td>
+                                                <td><code>{{ row.ip }}</code></td>
+                                                <td>{{ row.username or '—' }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <p class="text-muted">今日无失败登录记录</p>
+                                {% endif %}
+                            </div>
+
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    {# ── 7. Active Users ────────────────────────────────────────────── #}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-users"></i> 当前在线用户
+                        {% if metrics.active_users is not mapping and metrics.active_users | length > 0 %}
+                            <span class="badge bg-success ms-2">{{ metrics.active_users | length }}</span>
+                        {% endif %}
+                    </h5>
+                    <small class="text-muted">30 分钟内有活动视为在线</small>
+                </div>
+                <div class="card-body">
+                    {% if metrics.active_users is mapping and metrics.active_users.get('error') %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> 无法获取在线用户：{{ metrics.active_users.error }}
+                        </div>
+                    {% elif not metrics.active_users %}
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-user-slash fa-2x"></i>
+                            <p class="mt-2 mb-0">当前无在线用户</p>
+                        </div>
+                    {% else %}
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>工号</th>
+                                        <th>姓名</th>
+                                        <th>角色</th>
+                                        <th>最后活动</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for u in metrics.active_users %}
+                                    <tr>
+                                        <td><strong>{{ u.employee_id }}</strong></td>
+                                        <td>{{ u.username or '—' }}</td>
+                                        <td>
+                                            {% if u.role == 'admin' %}
+                                                <span class="badge bg-danger">管理员</span>
+                                            {% elif u.role == 'lab_engineer' %}
+                                                <span class="badge bg-warning text-dark">实验工程师</span>
+                                            {% else %}
+                                                <span class="badge bg-info text-dark">研究工程师</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="font-monospace text-muted">{{ u.last_seen_at }}</td>
+                                        <td>
+                                            {% if u.employee_id == current_user.employee_id %}
+                                                <span class="text-muted">(你)</span>
+                                            {% else %}
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        onclick="kickUser({{ u.id }}, '{{ u.employee_id }}')">
+                                                    <i class="fas fa-sign-out-alt"></i> 踢出
+                                                </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<style>
+.log-entry {
+    border-left: 3px solid #dee2e6;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+.log-entry.level-ERROR    { border-left-color: #dc3545; }
+.log-entry.level-CRITICAL { border-left-color: #6f42c1; }
+.log-entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+.log-entry-timestamp { font-family: monospace; font-size: 0.85rem; color: #6c757d; }
+.log-entry-level    { font-weight: bold; padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; }
+.level-ERROR    { background: #f8d7da; color: #842029; }
+.level-CRITICAL { background: #e2d9f3; color: #3d0a91; }
+.log-entry-message { font-size: 0.9rem; margin-bottom: 3px; }
+.log-entry-details { font-size: 0.8rem; color: #6c757d; }
+.log-entry-error {
+    background: #fff5f5; border: 1px solid #feb2b2;
+    padding: 8px; margin-top: 5px; border-radius: 3px;
+    font-family: monospace; font-size: 0.85rem; color: #c53030;
+}
+</style>
+
+<script>
+async function kickUser(userId, employeeId) {
+    if (!confirm(`确定要将 ${employeeId} 强制下线吗？`)) return;
+    try {
+        const resp = await fetch(`/admin/user/${userId}/kick`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()}
+        });
+        const result = await resp.json();
+        if (result.success) {
+            location.reload();
+        } else {
+            alert(result.message);
+        }
+    } catch (e) {
+        alert('操作失败，请重试');
+    }
+}
+</script>
+{% endblock %}

@@ -1,10 +1,16 @@
+import os
+import pathlib
+
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
 from functools import wraps
+from werkzeug.utils import secure_filename as sanitize
+
 from app import db
 from app.models import User
 from app.utils import log_manager
-from app.config.logging_config import ADMIN_LOG_VIEW
+from app.utils.system_monitor import get_system_metrics
+from app.config.logging_config import ADMIN_LOG_VIEW, LOG_DIR
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -120,7 +126,6 @@ def logs():
 @admin_required
 def view_log():
     """View specific log file contents"""
-    from werkzeug.utils import secure_filename as sanitize
     raw_filename = request.args.get('filename')
     filename = sanitize(raw_filename) if raw_filename else None
     max_rows = int(request.args.get('max_rows', ADMIN_LOG_VIEW.get('max_rows_display', 1000)))
@@ -147,16 +152,17 @@ def download_log(filename):
         flash('日志下载功能已禁用', 'warning')
         return redirect(url_for('admin.logs'))
 
-    import os
-    from werkzeug.utils import secure_filename as sanitize
-    from app.config.logging_config import LOG_DIR
-
     safe_filename = sanitize(filename)
     if not safe_filename:
         flash('无效的文件名', 'danger')
         return redirect(url_for('admin.logs'))
 
-    filepath = os.path.join(LOG_DIR, safe_filename)
+    log_dir_real = pathlib.Path(LOG_DIR).resolve()
+    file_real = (log_dir_real / safe_filename).resolve()
+    if not str(file_real).startswith(str(log_dir_real) + os.sep):
+        flash('无效的文件路径', 'danger')
+        return redirect(url_for('admin.logs'))
+    filepath = str(file_real)
 
     if not os.path.exists(filepath):
         flash('日志文件不存在', 'danger')
@@ -174,3 +180,36 @@ def log_statistics():
         'success': True,
         'statistics': stats
     })
+
+
+# ============================================================
+# System Monitor Routes
+# ============================================================
+
+@bp.route('/monitor')
+@login_required
+@admin_required
+def monitor():
+    """System health monitoring dashboard."""
+    return render_template('admin/monitor.html', metrics=get_system_metrics())
+
+
+@bp.route('/monitor/data')
+@login_required
+@admin_required
+def monitor_data():
+    """Return current metrics as JSON (for future auto-refresh)."""
+    return jsonify({'success': True, 'metrics': get_system_metrics()})
+
+
+@bp.route('/user/<int:user_id>/kick', methods=['POST'])
+@login_required
+@admin_required
+def kick_user(user_id):
+    """Force a user offline by invalidating their session token."""
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        return jsonify({'success': False, 'message': '不能踢出自己的账户'})
+    user.session_token = None
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'用户 {user.employee_id} 已被强制下线'})

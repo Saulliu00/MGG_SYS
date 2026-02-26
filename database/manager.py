@@ -135,17 +135,24 @@ def _run_sqlite_migrations(app):
 def _seed_admin(app):
     """
     Create default admin user if not exists.
-    
-    Default credentials:
-        employee_id: admin
-        password: admin123
-    
-    ⚠️ IMPORTANT: Change this password in production!
+
+    Password is read from ADMIN_PASSWORD env var. If not set, a secure
+    random password is generated and printed to stdout once.
     """
+    import os, secrets
     from database.models import User
-    
+
     admin_user = User.query.filter_by(employee_id='admin').first()
     if not admin_user:
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        if not admin_password:
+            admin_password = secrets.token_urlsafe(12)
+            print(
+                f'\n[MGG_SYS] Default admin account created.\n'
+                f'  Employee ID : admin\n'
+                f'  Password    : {admin_password}\n'
+                f'  (Set ADMIN_PASSWORD env var to choose your own password)\n'
+            )
         admin_user = User(
             username='Administrator',
             employee_id='admin',
@@ -153,10 +160,10 @@ def _seed_admin(app):
             role='admin',
             department='IT'
         )
-        admin_user.set_password('admin123')
+        admin_user.set_password(admin_password)
         db.session.add(admin_user)
         db.session.commit()
-        app.logger.info('✓ Created default admin user (admin/admin123)')
+        app.logger.info('✓ Created default admin user')
     else:
         app.logger.info('✓ Admin user already exists')
 

@@ -1,10 +1,20 @@
 from app import db, login_manager, bcrypt
 from flask_login import UserMixin
+from flask import session
 from datetime import datetime
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    try:
+        user = User.query.get(int(user_id))
+        if user is None:
+            return None
+        # Kick support: admin clears session_token in DB → force logout
+        if user.session_token is None and session.get('user_session_token') is not None:
+            return None
+        return user
+    except (ValueError, TypeError):
+        return None
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
@@ -15,6 +25,8 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(20), nullable=False, default='research_engineer')
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen_at = db.Column(db.DateTime)
+    session_token = db.Column(db.String(64))
 
     # Relationships
     simulations = db.relationship('Simulation', backref='user', lazy=True)

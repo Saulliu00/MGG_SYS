@@ -43,6 +43,7 @@ async function runSimulation() {
     try {
         const response = await fetch('/simulation/run', {
             method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()},
             body: formData
         });
 
@@ -120,6 +121,7 @@ async function uploadTestResult() {
     try {
         const response = await fetch('/simulation/upload', {
             method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()},
             body: formData
         });
 
@@ -151,7 +153,8 @@ async function plotComparisonChart() {
         const response = await fetch('/simulation/generate_comparison_chart', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
             },
             body: JSON.stringify({
                 simulation_data: simulationData,

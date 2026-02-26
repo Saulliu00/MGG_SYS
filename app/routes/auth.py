@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app
 from flask_login import login_user, logout_user, current_user, login_required
 from urllib.parse import urlparse
-from app import db
+import secrets
+from app import db, limiter
 from app.models import User
 from app.middleware import log_user_login, log_user_logout
 from app.utils import log_manager
@@ -33,6 +34,7 @@ def check_daily_login():
             return resp
 
 @bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
@@ -44,9 +46,14 @@ def login():
         user = User.query.filter_by(employee_id=employee_id).first()
 
         if user and user.check_password(password) and user.is_active:
+            # Generate a new session token for kick support
+            token = secrets.token_hex(16)
+            user.session_token = token
+            db.session.commit()
             login_user(user)
             session.permanent = True
             session['login_date'] = date.today().isoformat()
+            session['user_session_token'] = token
             # Log successful login
             log_user_login(
                 username=user.username,
@@ -115,8 +122,13 @@ def register():
 
         new_user = User(employee_id=employee_id, username=username)
         new_user.set_password(password)
-        db.session.add(new_user)
-        db.session.commit()
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('工号已被注册', 'danger')
+            return render_template('auth/register.html')
 
         # Log user registration
         log_manager.log_info(
@@ -155,8 +167,10 @@ def settings():
                 flash('当前密码错误', 'danger')
             elif new_password != confirm_password:
                 flash('两次输入的新密码不一致', 'danger')
-            elif len(new_password) < 6:
-                flash('新密码长度不能少于6位', 'danger')
+            elif len(new_password) < 8:
+                flash('新密码长度不能少于8位', 'danger')
+            elif not any(c.isdigit() for c in new_password):
+                flash('新密码必须包含至少一个数字', 'danger')
             else:
                 current_user.set_password(new_password)
                 db.session.commit()

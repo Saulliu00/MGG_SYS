@@ -28,6 +28,7 @@ async function addUser() {
     try {
         const response = await fetch('/admin/user/add', {
             method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()},
             body: formData
         });
 
@@ -54,7 +55,8 @@ async function toggleUser(userId) {
 
     try {
         const response = await fetch(`/admin/user/${userId}/toggle`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()}
         });
 
         const result = await response.json();
@@ -79,7 +81,8 @@ async function deleteUser(userId, username) {
 
     try {
         const response = await fetch(`/admin/user/${userId}/delete`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()}
         });
 
         const result = await response.json();
@@ -105,6 +108,7 @@ async function resetPassword() {
     try {
         const response = await fetch(`/admin/user/${userId}/reset-password`, {
             method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()},
             body: formData
         });
 

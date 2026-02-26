@@ -2,7 +2,6 @@
 from .timeout import init_timeout_middleware, with_timeout, TimeoutError
 from .logging_middleware import (
     init_logging_middleware,
-    log_action,
     log_user_login,
     log_user_logout,
     log_simulation_run,
@@ -14,7 +13,6 @@ __all__ = [
     'with_timeout',
     'TimeoutError',
     'init_logging_middleware',
-    'log_action',
     'log_user_login',
     'log_user_logout',
     'log_simulation_run',

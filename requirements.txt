@@ -25,6 +25,7 @@ email-validator==2.1.0
 
 # Security
 Flask-Bcrypt==1.0.1
+Flask-Limiter==3.5.0
 
 # Utilities
 python-dotenv==1.0.0

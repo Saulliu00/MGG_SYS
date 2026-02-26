@@ -211,6 +211,7 @@
 
         fetch('/simulation/upload', {
             method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()},
             body: formData
         })
         .then(response => response.json())

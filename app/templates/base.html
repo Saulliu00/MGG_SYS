@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}仿真系统{% endblock %}</title>
 
     <!-- Favicon -->
@@ -98,6 +99,9 @@
                     <a href="{{ url_for('admin.logs') }}" class="menu-level-2-item">
                         <i class="fas fa-file-alt"></i> 系统日志
                     </a>
+                    <a href="{{ url_for('admin.monitor') }}" class="menu-level-2-item">
+                        <i class="fas fa-heartbeat"></i> 系统监控
+                    </a>
                 </div>
             </div>
             {% endif %}
@@ -178,6 +182,13 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    // Global CSRF token helper — include in every fetch POST request
+    function getCsrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.content || '';
+    }
+    </script>
 
     {% block extra_js %}{% endblock %}
 </body>

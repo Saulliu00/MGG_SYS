@@ -1,6 +1,9 @@
+import os
+
 from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for
 from flask_login import login_required, current_user
 from functools import wraps
+from werkzeug.utils import secure_filename
 from app.utils.errors import (
     FileValidationError,
     SimulationError,
@@ -92,6 +95,7 @@ def run_simulation():
         })
 
     except Exception as e:
+        current_app.logger.error('Unexpected simulation error: %s', e, exc_info=True)
         log_simulation_run(
             username=current_user.username,
             user_id=current_user.id,
@@ -101,8 +105,8 @@ def run_simulation():
         )
         return jsonify({
             'success': False,
-            'message': f'Error running simulation: {str(e)}'
-        })
+            'message': '服务器内部错误，请稍后重试'
+        }), 500
 
 @bp.route('/upload', methods=['POST'])
 @login_required
@@ -152,6 +156,7 @@ def upload_test_result():
         return jsonify({'success': False, 'message': str(e)})
 
     except Exception as e:
+        current_app.logger.error('Unexpected file upload error: %s', e, exc_info=True)
         log_file_upload(
             username=current_user.username,
             user_id=current_user.id,
@@ -160,7 +165,7 @@ def upload_test_result():
             success=False,
             error=str(e)
         )
-        return jsonify({'success': False, 'message': f'文件处理错误: {str(e)}'})
+        return jsonify({'success': False, 'message': '服务器内部错误，请稍后重试'}), 500
 
 @bp.route('/history')
 @login_required
@@ -175,7 +180,6 @@ def history():
 @lab_required
 def experiment():
     """Submit experiment data with batch file upload"""
-    import os
     try:
         employee_id = request.form.get('employee_id', '')
         test_name = request.form.get('test_name', '')
@@ -195,7 +199,6 @@ def experiment():
         for file in files:
             if file.filename == '':
                 continue
-            from werkzeug.utils import secure_filename
             filename = secure_filename(file.filename)
             # Prefix with ticket number if available
             if ticket_number:
@@ -211,7 +214,8 @@ def experiment():
         })
 
     except Exception as e:
-        return jsonify({'success': False, 'message': f'提交失败: {str(e)}'})
+        current_app.logger.error('Experiment submission error: %s', e, exc_info=True)
+        return jsonify({'success': False, 'message': '服务器内部错误，请稍后重试'}), 500
 
 @bp.route('/predict', methods=['POST'])
 @login_required
@@ -237,9 +241,10 @@ def predict():
         }), 500
 
     except Exception as e:
+        current_app.logger.error('Unexpected prediction error: %s', e, exc_info=True)
         return jsonify({
             'success': False,
-            'error': f'Error running simulation: {str(e)}'
+            'error': '服务器内部错误，请稍后重试'
         }), 500
 
 @bp.route('/save_to_data_folder', methods=['POST'])
@@ -267,9 +272,10 @@ def save_to_data_folder():
         }), 400
 
     except Exception as e:
+        current_app.logger.error('Save to data folder error: %s', e, exc_info=True)
         return jsonify({
             'success': False,
-            'error': f'保存文件失败: {str(e)}'
+            'error': '服务器内部错误，请稍后重试'
         }), 500
 
 
@@ -307,9 +313,10 @@ def load_test_data():
         }), 500
 
     except Exception as e:
+        current_app.logger.error('Load test data error: %s', e, exc_info=True)
         return jsonify({
             'success': False,
-            'error': f'Error loading test data: {str(e)}'
+            'error': '服务器内部错误，请稍后重试'
         }), 500
 
 
@@ -340,7 +347,8 @@ def generate_comparison_chart():
         }), 400
 
     except Exception as e:
+        current_app.logger.error('Comparison chart generation error: %s', e, exc_info=True)
         return jsonify({
             'success': False,
-            'error': f'Error generating comparison chart: {str(e)}'
+            'error': '服务器内部错误，请稍后重试'
         }), 500

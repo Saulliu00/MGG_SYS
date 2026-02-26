@@ -1,5 +1,8 @@
 """File handling utilities for MGG_SYS"""
+import logging
 import os
+import time
+
 import pandas as pd
 from typing import Tuple, List
 from werkzeug.utils import secure_filename
@@ -139,8 +142,6 @@ class FileHandler:
             directory: Directory containing temp files
             max_age_minutes: Maximum age of files to keep (default: 60)
         """
-        import time
-
         if not os.path.exists(directory):
             return
 
@@ -154,8 +155,8 @@ class FileHandler:
                 if file_age > max_age_seconds:
                     try:
                         os.remove(file_path)
-                    except Exception:
-                        pass  # Silently ignore errors during cleanup
+                    except Exception as e:
+                        logging.getLogger(__name__).warning('Failed to clean up temp file %s: %s', file_path, e)
 
     @staticmethod
     def delete_file(file_path: str):
@@ -168,5 +169,5 @@ class FileHandler:
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-        except Exception:
-            pass  # Silently ignore errors
+        except Exception as e:
+            logging.getLogger(__name__).warning('Failed to delete file %s: %s', file_path, e)
