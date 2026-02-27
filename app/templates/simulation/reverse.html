@@ -80,55 +80,35 @@
             </form>
         </div>
 
-        <!-- Middle Panel - File Upload -->
+        <!-- Middle Panel - Pressure Data Input -->
         <div class="panel test-info-panel">
             <div class="panel-title">压力数据上传</div>
 
-            <!-- File Input (hidden) -->
-            <input type="file" id="reverseFileInput" accept=".xlsx" style="display: none;">
+            <!-- Input table -->
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead>
+                    <tr style="background: #667eea; color: white;">
+                        <th style="padding: 0.4rem 0.6rem; border: 1px solid #5a6fd6; text-align: center;">时间(ms)</th>
+                        <th style="padding: 0.4rem 0.6rem; border: 1px solid #5a6fd6; text-align: center;">压力(MPa)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in [1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45] %}
+                    <tr>
+                        <td style="padding: 0.3rem 0.6rem; border: 1px solid #ddd; text-align: center; background: #f0f3ff; font-weight: bold; color: #4a5a8a;">{{ t }}</td>
+                        <td style="padding: 0.2rem 0.4rem; border: 1px solid #ddd;">
+                            <input type="number" step="any" class="pressure-input form-control"
+                                   data-time="{{ t }}"
+                                   style="padding: 0.25rem 0.4rem; font-size: 0.85rem;"
+                                   placeholder="0.0">
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
 
-            <div class="upload-section" onclick="document.getElementById('reverseFileInput').click()">
-                <i class="fas fa-cloud-upload-alt fa-2x" style="color: #667eea;"></i>
-                <p style="margin-top: 0.5rem; font-weight: bold; margin-bottom: 0.25rem;">点击上传压力曲线文件 (.xlsx)</p>
-                <p style="font-size: 0.82rem; color: #7f8c8d; margin-bottom: 0.25rem;">文件应包含时间和压力两列数据</p>
-            </div>
-
-            <div style="margin-top: 1rem; background: #f8f9fa; padding: 0.75rem; border-radius: 6px; border-left: 4px solid #667eea;">
-                <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; font-size: 0.85rem;">
-                    <i class="fas fa-info-circle"></i> 文件命名规范
-                </h6>
-                <p style="font-size: 0.82rem; color: #5a6c7d; margin-bottom: 0.35rem;">
-                    <strong>格式：</strong><code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.8rem;">测试名称_日期_编号.xlsx</code>
-                </p>
-                <p style="font-size: 0.82rem; color: #5a6c7d; margin-bottom: 0.65rem;">
-                    <strong>示例：</strong><code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.8rem;">压力测试_20260106_001.xlsx</code>
-                </p>
-
-                <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.5rem; margin-top: 0.75rem; font-size: 0.85rem;">
-                    <i class="fas fa-table"></i> Excel格式要求
-                </h6>
-                <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background: #667eea; color: white;">
-                            <th style="padding: 0.35rem; border: 1px solid #ddd;">列名</th>
-                            <th style="padding: 0.35rem; border: 1px solid #ddd;">单位</th>
-                            <th style="padding: 0.35rem; border: 1px solid #ddd;">示例</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">时间</td>
-                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">ms</td>
-                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">0, 1, 2, ...</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">压力</td>
-                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">MPa</td>
-                            <td style="padding: 0.35rem; border: 1px solid #ddd; background: white;">0.5, 12.3, 45.6, ...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <!-- Live Plotly chart -->
+            <div id="reversePressureChart" style="margin-top: 0.75rem; height: 220px;"></div>
         </div>
 
         <!-- Right Panel - Results -->
@@ -190,59 +170,61 @@
 
 {% block extra_js %}
 <script>
-    let reversePressureData = null;
+    // ── Live PT chart ─────────────────────────────────────────────────────────
 
-    // Handle file upload
-    document.getElementById('reverseFileInput').addEventListener('change', function(event) {
-        const file = event.target.files[0];
-        if (!file) return;
+    function getTableData() {
+        const times = [];
+        const pressures = [];
+        document.querySelectorAll('.pressure-input').forEach(input => {
+            const p = parseFloat(input.value);
+            if (!isNaN(p)) {
+                times.push(parseFloat(input.dataset.time));
+                pressures.push(p);
+            }
+        });
+        return { time: times, pressure: pressures };
+    }
 
-        if (!file.name.endsWith('.xlsx')) {
-            alert('请上传.xlsx格式的文件');
+    function updateReversePlot() {
+        const data = getTableData();
+        const chartDiv = document.getElementById('reversePressureChart');
+        const layout = {
+            xaxis: { title: '时间 (ms)', gridcolor: '#e0e0e0' },
+            yaxis: { title: '压力 (MPa)', gridcolor: '#e0e0e0' },
+            hovermode: 'x unified',
+            template: 'plotly_white',
+            showlegend: false,
+            margin: { l: 55, r: 20, t: 15, b: 45 }
+        };
+        if (data.time.length === 0) {
+            Plotly.newPlot(chartDiv, [], layout, { responsive: true });
             return;
         }
+        Plotly.newPlot(chartDiv, [{
+            x: data.time,
+            y: data.pressure,
+            mode: 'lines+markers',
+            line: { color: '#667eea', width: 2 },
+            marker: { size: 5, color: '#667eea' }
+        }], layout, { responsive: true });
+    }
 
-        const formData = new FormData();
-        formData.append('file', file);
-
-        // Show loading message
-        const placeholder = document.getElementById('reverseResultsPlaceholder');
-        placeholder.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #667eea;"></i><p style="margin-top: 0.5rem;">正在读取文件...</p>';
-
-        fetch('/simulation/upload', {
-            method: 'POST',
-            headers: {'X-CSRFToken': getCsrfToken()},
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                reversePressureData = data.data;
-                placeholder.innerHTML = '<i class="fas fa-check-circle" style="font-size: 2rem; color: #27ae60;"></i><p style="margin-top: 0.5rem; color: #27ae60; font-weight: bold;">文件已上传：' + file.name + '</p><p style="font-size: 0.82rem;">点击"仿真"按钮开始预测</p>';
-            } else {
-                placeholder.innerHTML = '<i class="fas fa-exclamation-circle" style="font-size: 2rem; color: #e74c3c;"></i><p style="margin-top: 0.5rem; color: #e74c3c;">文件读取失败</p>';
-                alert('文件读取失败: ' + (data.message || '未知错误'));
-            }
-        })
-        .catch(error => {
-            placeholder.innerHTML = '<i class="fas fa-exclamation-circle" style="font-size: 2rem; color: #e74c3c;"></i><p style="margin-top: 0.5rem; color: #e74c3c;">上传失败</p>';
-            console.error('Error:', error);
-            alert('文件上传失败');
-        });
+    // Attach live-update listener to every pressure input
+    document.querySelectorAll('.pressure-input').forEach(input => {
+        input.addEventListener('input', updateReversePlot);
     });
 
-    // Run reverse simulation
+    // ── Reverse simulation ────────────────────────────────────────────────────
+
     function runReverseSimulation() {
-        if (!reversePressureData) {
-            alert('请先上传压力数据文件');
+        const data = getTableData();
+        if (data.time.length === 0) {
+            alert('请先在表格中输入压力数据');
             return;
         }
 
-        // Get form values
         const form = document.getElementById('reverseSimulationForm');
         const formData = new FormData(form);
-
-        // Validate required fields
         const requiredFields = ['shell_height', 'current', 'sensor_range', 'volume'];
         for (let field of requiredFields) {
             if (!formData.get(field)) {
@@ -251,40 +233,29 @@
             }
         }
 
-        // Show loading
         const resultsDiv = document.getElementById('reverseResults');
         const placeholderDiv = document.getElementById('reverseResultsPlaceholder');
-
         placeholderDiv.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #667eea;"></i><p style="margin-top: 0.5rem;">正在运行逆向预测...</p>';
+        placeholderDiv.style.display = 'block';
+        resultsDiv.style.display = 'none';
 
-        // Simulate reverse prediction (mock for now)
+        // Mock prediction (placeholder until backend reverse model is ready)
         setTimeout(() => {
-            // Mock prediction results
-            const pressureValues = reversePressureData.pressure || [];
-            const peakPressure = Math.max(...pressureValues);
-            const avgPressure = pressureValues.reduce((a, b) => a + b, 0) / pressureValues.length;
+            const peakPressure = Math.max(...data.pressure);
+            const avgPressure = data.pressure.reduce((a, b) => a + b, 0) / data.pressure.length;
 
-            const ncTypes = ['D', 'E', 'F'];
-            const predictedNCType = ncTypes[Math.floor(Math.random() * ncTypes.length)];
-            const predictedNCAmount = (peakPressure / 1.2).toFixed(1);
+            document.getElementById('predicted_nc_type').value = ['D', 'E', 'F'][Math.floor(Math.random() * 3)];
+            document.getElementById('predicted_nc_amount').value = (peakPressure / 1.2).toFixed(1);
+            document.getElementById('predicted_gp_type').value = ['A', 'B', 'C'][Math.floor(Math.random() * 3)];
+            document.getElementById('predicted_gp_amount').value = (avgPressure * 0.8).toFixed(1);
+            document.getElementById('confidence_score').textContent = (92 + Math.random() * 6).toFixed(1) + '%';
 
-            const gpTypes = ['A', 'B', 'C'];
-            const predictedGPType = gpTypes[Math.floor(Math.random() * gpTypes.length)];
-            const predictedGPAmount = (avgPressure * 0.8).toFixed(1);
-
-            const confidenceScore = (92 + Math.random() * 6).toFixed(1);
-
-            // Update results
-            document.getElementById('predicted_nc_type').value = predictedNCType;
-            document.getElementById('predicted_nc_amount').value = predictedNCAmount;
-            document.getElementById('predicted_gp_type').value = predictedGPType;
-            document.getElementById('predicted_gp_amount').value = predictedGPAmount;
-            document.getElementById('confidence_score').textContent = confidenceScore + '%';
-
-            // Show results
             resultsDiv.style.display = 'block';
             placeholderDiv.style.display = 'none';
         }, 1500);
     }
+
+    // Initialise empty chart on load
+    window.addEventListener('load', updateReversePlot);
 </script>
 {% endblock %}
