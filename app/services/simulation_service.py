@@ -2,8 +2,8 @@
 import json
 from typing import Dict, List
 from app.models import Simulation
-from app.utils.subprocess_runner import SubprocessRunner
-from app.utils.errors import SimulationError, SubprocessError, SubprocessTimeoutError
+from app.utils.model_runner import run_forward_inference
+from app.utils.errors import SimulationError
 
 
 class SimulationService:
@@ -58,28 +58,21 @@ class SimulationService:
                 work_order=params.get('work_order')
             )
 
-            # Run the simulation script
-            response_data = SubprocessRunner.run_simulation_script(nc_usage_1)
-
-            # Extract result data
-            result_data = {
-                'plot_data': response_data.get('plot_data'),
-                'statistics': response_data.get('statistics')
-            }
+            # Run inference in-process using the loaded ML model
+            response_data = run_forward_inference(nc_usage_1)
 
             # Save result to database
-            simulation.result_data = json.dumps(result_data)
+            simulation.result_data = json.dumps(response_data)
             self.db.session.add(simulation)
             self.db.session.commit()
 
             return {
                 'success': True,
                 'simulation_id': simulation.id,
-                'data': result_data
+                'data': response_data
             }
 
-        except (SubprocessError, SubprocessTimeoutError, SimulationError):
-            # Re-raise custom exceptions
+        except SimulationError:
             raise
 
         except Exception as e:
@@ -100,12 +93,9 @@ class SimulationService:
             SubprocessTimeoutError: If prediction times out
         """
         try:
-            # Run the simulation script
-            response_data = SubprocessRunner.run_simulation_script(nc_usage_1)
-            return response_data
+            return run_forward_inference(nc_usage_1)
 
-        except (SubprocessError, SubprocessTimeoutError, SimulationError):
-            # Re-raise custom exceptions
+        except SimulationError:
             raise
 
         except Exception as e:
