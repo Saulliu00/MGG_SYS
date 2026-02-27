@@ -303,12 +303,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialize on page load
 window.addEventListener('load', function() {
-    // Initialize empty charts
     initializeCharts();
-
-    // Set default active tab
-    const firstTab = document.querySelector('.tab-btn');
-    if (firstTab) {
-        firstTab.click();
-    }
 });

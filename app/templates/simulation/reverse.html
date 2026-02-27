@@ -85,7 +85,7 @@
             <div class="panel-title">压力数据上传</div>
 
             <!-- Input table -->
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+            <table id="pressureTable" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
                 <thead>
                     <tr style="background: #667eea; color: white;">
                         <th style="padding: 0.4rem 0.6rem; border: 1px solid #5a6fd6; text-align: center;">时间(ms)</th>
@@ -93,12 +93,15 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for t in [1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45] %}
+                    {% for t in [0.5, 1, 2, 3, 4, 7, 10, 15, 20, 25, 31, 38] %}
                     <tr>
-                        <td style="padding: 0.3rem 0.6rem; border: 1px solid #ddd; text-align: center; background: #f0f3ff; font-weight: bold; color: #4a5a8a;">{{ t }}</td>
+                        <td style="padding: 0.2rem 0.4rem; border: 1px solid #ddd;">
+                            <input type="number" step="any" class="time-input form-control"
+                                   value="{{ t }}"
+                                   style="padding: 0.25rem 0.4rem; font-size: 0.85rem; text-align: center;">
+                        </td>
                         <td style="padding: 0.2rem 0.4rem; border: 1px solid #ddd;">
                             <input type="number" step="any" class="pressure-input form-control"
-                                   data-time="{{ t }}"
                                    style="padding: 0.25rem 0.4rem; font-size: 0.85rem;"
                                    placeholder="0.0">
                         </td>
@@ -175,10 +178,11 @@
     function getTableData() {
         const times = [];
         const pressures = [];
-        document.querySelectorAll('.pressure-input').forEach(input => {
-            const p = parseFloat(input.value);
-            if (!isNaN(p)) {
-                times.push(parseFloat(input.dataset.time));
+        document.querySelectorAll('#pressureTable tbody tr').forEach(row => {
+            const t = parseFloat(row.querySelector('.time-input').value);
+            const p = parseFloat(row.querySelector('.pressure-input').value);
+            if (!isNaN(t) && !isNaN(p)) {
+                times.push(t);
                 pressures.push(p);
             }
         });
@@ -209,8 +213,8 @@
         }], layout, { responsive: true });
     }
 
-    // Attach live-update listener to every pressure input
-    document.querySelectorAll('.pressure-input').forEach(input => {
+    // Attach live-update listener to every time and pressure input
+    document.querySelectorAll('.time-input, .pressure-input').forEach(input => {
         input.addEventListener('input', updateReversePlot);
     });
 
