@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="main-container">
-    <div class="simulation-container">
+    <div class="simulation-container" style="grid-template-columns: 1fr 1.5fr 1.5fr;">
         <!-- Left Panel - Input Parameters -->
         <div class="panel parameters-panel">
             <div class="panel-title">输入参数</div>
@@ -139,7 +139,7 @@
                     </div>
                 </div>
 
-                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px;">
+                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.65rem;">
                     <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #27ae60; padding-bottom: 0.35rem; font-size: 0.85rem;">
                         <i class="fas fa-vial"></i> GP配方预测
                     </h6>
@@ -153,11 +153,33 @@
                     </div>
                 </div>
 
+                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.65rem;">
+                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #e67e22; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                        <i class="fas fa-fire"></i> 其他
+                    </h6>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>点火具建议:</label>
+                        <input type="text" id="predicted_igniter" class="form-control" readonly style="background: white; font-weight: bold; color: #e67e22;">
+                    </div>
+                </div>
+
                 <div style="margin-top: 0.75rem; padding: 0.65rem; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #27ae60;">
                     <p style="margin: 0; font-size: 0.82rem; color: #2c3e50;">
                         <i class="fas fa-check-circle" style="color: #27ae60;"></i>
                         <strong>置信度：</strong><span id="confidence_score">--</span>
                     </p>
+                </div>
+
+                <div style="margin-top: 0.75rem; text-align: center;">
+                    <button type="button" class="btn btn-primary" style="width: 80%; padding: 0.55rem;" onclick="generateReverseWorkOrder()">
+                        <i class="fas fa-file-alt"></i> 生成工单
+                    </button>
+                    <div id="reverseWorkOrderDisplay" style="display: none; margin-top: 0.75rem; background: #f0f3ff; border-radius: 6px; padding: 0.65rem; text-align: left; font-size: 0.8rem; border-left: 4px solid #667eea;">
+                        <div style="font-weight: bold; color: #667eea; margin-bottom: 0.4rem;">
+                            <i class="fas fa-file-alt"></i> 工单号: <span id="reverseWorkOrderNumber"></span>
+                        </div>
+                        <div id="reverseWorkOrderParams" style="color: #2c3e50; line-height: 1.7;"></div>
+                    </div>
                 </div>
             </div>
 
@@ -254,9 +276,56 @@
             document.getElementById('predicted_gp_amount').value = (avgPressure * 0.8).toFixed(1);
             document.getElementById('confidence_score').textContent = (92 + Math.random() * 6).toFixed(1) + '%';
 
+            // 点火具: copy user selection if provided, otherwise suggest a value
+            const igniterVal = formData.get('igniter');
+            document.getElementById('predicted_igniter').value = igniterVal || '115';
+
+            // Reset work order display when new prediction runs
+            document.getElementById('reverseWorkOrderDisplay').style.display = 'none';
+
             resultsDiv.style.display = 'block';
             placeholderDiv.style.display = 'none';
         }, 1500);
+    }
+
+    // ── Work order generation ─────────────────────────────────────────────────
+
+    function generateReverseWorkOrder() {
+        if (document.getElementById('reverseResults').style.display === 'none') {
+            alert('请先运行仿真获取预测结果');
+            return;
+        }
+
+        // Generate WO number
+        const now = new Date();
+        const pad = (n, w = 2) => String(n).padStart(w, '0');
+        const wo = `WO${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+                   `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}` +
+                   `${pad(Math.floor(Math.random() * 10000), 4)}`;
+
+        document.getElementById('reverseWorkOrderNumber').textContent = wo;
+
+        // Collect input parameters
+        const form = document.getElementById('reverseSimulationForm');
+        const fd = new FormData(form);
+        const device = fd.get('device') || '无';
+
+        // Collect suggestion results
+        const ncType    = document.getElementById('predicted_nc_type').value;
+        const ncAmount  = document.getElementById('predicted_nc_amount').value;
+        const gpType    = document.getElementById('predicted_gp_type').value;
+        const gpAmount  = document.getElementById('predicted_gp_amount').value;
+        const igniter   = document.getElementById('predicted_igniter').value;
+
+        document.getElementById('reverseWorkOrderParams').innerHTML =
+            `<b>输入参数</b><br>` +
+            `管壳高度: ${fd.get('shell_height')} mm &nbsp;|&nbsp; 通电条件: ${fd.get('current')} A<br>` +
+            `传感器量程: ${fd.get('sensor_range')} MPa &nbsp;|&nbsp; 容积: ${fd.get('volume')} cc &nbsp;|&nbsp; 测试设备: ${device}<br>` +
+            `<br><b>预测配方</b><br>` +
+            `NC: ${ncType} / ${ncAmount} mg &nbsp;|&nbsp; GP: ${gpType} / ${gpAmount} mg<br>` +
+            `点火具: ${igniter}`;
+
+        document.getElementById('reverseWorkOrderDisplay').style.display = 'block';
     }
 
     // Initialise empty chart on load
