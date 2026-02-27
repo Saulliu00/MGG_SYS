@@ -1,9 +1,10 @@
 """Simulation service for handling simulation business logic"""
 import json
 from typing import Dict, List
-from app.models import Simulation
+from app.models import Simulation, TestResult
 from app.utils.model_runner import run_forward_inference
 from app.utils.errors import SimulationError
+from app.services.comparison_service import ComparisonService
 
 
 class SimulationService:
@@ -164,3 +165,66 @@ class SimulationService:
             return json.loads(simulation.result_data)
         except json.JSONDecodeError:
             return {}
+
+    def find_and_average_recipe_test_data(self, user_id: int, params: Dict) -> Dict:
+        """
+        Find all test results whose parent simulation matches the given recipe
+        parameters, then return an averaged time-series.
+
+        Returns:
+            {'found': True,  'data': {'time': [...], 'pressure': [...]}, 'count': N}
+            {'found': False} if no matching test data exists.
+        """
+        # Build query for simulations that match the recipe
+        query = Simulation.query.filter_by(user_id=user_id)
+
+        # Numeric fields – compare as floats with a small tolerance
+        numeric_fields = ('nc_usage_1', 'nc_usage_2', 'gp_usage', 'current')
+        # String recipe fields (exclude metadata like employee_id, notes, work_order)
+        string_fields = (
+            'ignition_model', 'nc_type_1', 'nc_type_2',
+            'gp_type', 'shell_model', 'sensor_model', 'body_model'
+        )
+
+        for field in string_fields:
+            value = params.get(field)
+            if value:
+                query = query.filter(getattr(Simulation, field) == value)
+
+        for field in numeric_fields:
+            raw = params.get(field)
+            if raw not in (None, '', 'None'):
+                try:
+                    query = query.filter(getattr(Simulation, field) == float(raw))
+                except (ValueError, TypeError):
+                    pass
+
+        matching_sims = query.all()
+        if not matching_sims:
+            return {'found': False}
+
+        sim_ids = [s.id for s in matching_sims]
+        test_results = TestResult.query.filter(
+            TestResult.simulation_id.in_(sim_ids)
+        ).all()
+
+        if not test_results:
+            return {'found': False}
+
+        # Parse data from each linked test result
+        datasets = []
+        for tr in test_results:
+            if not tr.data:
+                continue
+            try:
+                d = json.loads(tr.data)
+                if d.get('time') and d.get('pressure'):
+                    datasets.append(d)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+        if not datasets:
+            return {'found': False}
+
+        averaged = ComparisonService.average_datasets(datasets)
+        return {'found': True, 'data': averaged, 'count': len(datasets)}

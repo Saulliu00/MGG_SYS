@@ -14,6 +14,11 @@ function switchTab(tabName) {
     document.getElementById(tabName).classList.add('active');
     event.target.classList.add('active');
 
+    // When switching to comparison tab, auto-search for recipe test data
+    if (tabName === 'comparison') {
+        loadRecipeTestData();
+    }
+
     // Resize Plotly charts after tab switch (needed because charts were hidden)
     setTimeout(function() {
         if (tabName === 'simulation') {
@@ -34,6 +39,7 @@ function switchTab(tabName) {
 let simulationData = null;       // {time: [...], pressure: [...]}
 let simulationPlotData = null;   // Complete Plotly figure from backend
 let testData = null;             // {time: [...], pressure: [...]}
+let simulationId = null;         // ID of the last simulation run
 
 // Run simulation
 async function runSimulation() {
@@ -50,6 +56,9 @@ async function runSimulation() {
         const result = await response.json();
 
         if (result.success) {
+            // Store simulation ID for linking uploaded test files
+            simulationId = result.simulation_id;
+
             // Store complete Plotly figure from backend
             simulationPlotData = result.data.plot_data;
 
@@ -117,6 +126,10 @@ async function uploadTestResult() {
 
     const formData = new FormData();
     formData.append('file', file);
+    // Link this upload to the current simulation so recipe matching works later
+    if (simulationId) {
+        formData.append('simulation_id', simulationId);
+    }
 
     try {
         const response = await fetch('/simulation/upload', {
@@ -142,6 +155,104 @@ async function uploadTestResult() {
         console.error('Error:', error);
         alert('上传过程中发生错误');
     }
+}
+
+// Auto-search for matching recipe test data when switching to PT曲线对比 tab
+async function loadRecipeTestData() {
+    // Need a simulation to know the recipe
+    if (!simulationData) {
+        return;
+    }
+
+    // Collect current recipe parameters from the form
+    const form = document.getElementById('simulationForm');
+    const formData = new FormData(form);
+    const params = {};
+    for (const [key, value] of formData.entries()) {
+        params[key] = value;
+    }
+
+    try {
+        const response = await fetch('/simulation/fetch_recipe_test_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(params)
+        });
+
+        const result = await response.json();
+
+        if (result.found) {
+            // Use averaged recipe data as testData and render comparison chart
+            testData = result.data;
+            plotComparisonChart();
+        } else {
+            // No matching test data – prompt user to upload
+            showNoTestDataModal();
+        }
+    } catch (error) {
+        console.error('Error fetching recipe test data:', error);
+    }
+}
+
+// Modal: no matching test data found
+function showNoTestDataModal() {
+    // Remove any existing modal first
+    const existing = document.getElementById('noTestDataModal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'noTestDataModal';
+    overlay.style.cssText = [
+        'position:fixed', 'top:0', 'left:0', 'width:100%', 'height:100%',
+        'background:rgba(0,0,0,0.55)', 'z-index:9999',
+        'display:flex', 'align-items:center', 'justify-content:center'
+    ].join(';');
+
+    overlay.innerHTML = `
+        <div style="background:white;padding:2rem 2.5rem;border-radius:14px;max-width:420px;
+                    width:90%;text-align:center;box-shadow:0 6px 32px rgba(0,0,0,0.25);">
+            <i class="fas fa-exclamation-triangle"
+               style="font-size:2.8rem;color:#e67e22;margin-bottom:1rem;display:block;"></i>
+            <h5 style="color:#2c3e50;font-weight:bold;margin-bottom:0.6rem;">暂无匹配实验数据</h5>
+            <p style="color:#7f8c8d;font-size:0.9rem;margin-bottom:1.5rem;line-height:1.6;">
+                当前配方尚无匹配的实验数据。<br>
+                请先在「实际数据储存」中上传实验文件，再进行 PT 曲线对比。
+            </p>
+            <div style="display:flex;gap:0.75rem;justify-content:center;">
+                <button onclick="document.getElementById('noTestDataModal').remove(); switchTabDirect('actual');"
+                        style="background:#667eea;color:white;border:none;padding:0.55rem 1.4rem;
+                               border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:bold;">
+                    <i class="fas fa-upload"></i> 前往上传
+                </button>
+                <button onclick="document.getElementById('noTestDataModal').remove();"
+                        style="background:#ecf0f1;color:#2c3e50;border:none;padding:0.55rem 1.4rem;
+                               border-radius:8px;cursor:pointer;font-size:0.9rem;">
+                    关闭
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Close when clicking the overlay background
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) overlay.remove();
+    });
+}
+
+// Switch tab without triggering recipe search (used from modal)
+function switchTabDirect(tabName) {
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(tabName).classList.add('active');
+    // Highlight the matching tab button
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.textContent.includes('实际数据')) btn.classList.add('active');
+    });
 }
 
 // Plot comparison chart by requesting from backend

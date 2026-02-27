@@ -117,7 +117,10 @@ def upload_test_result():
             return jsonify({'success': False, 'message': '没有上传文件'})
 
         file = request.files['file']
-        result = current_app.file_service.process_test_result_upload(file, current_user.id)
+        simulation_id = request.form.get('simulation_id')
+        result = current_app.file_service.process_test_result_upload(
+            file, current_user.id, simulation_id=simulation_id
+        )
 
         # Log successful upload
         log_file_upload(
@@ -318,6 +321,22 @@ def load_test_data():
             'success': False,
             'error': '服务器内部错误，请稍后重试'
         }), 500
+
+
+@bp.route('/fetch_recipe_test_data', methods=['POST'])
+@login_required
+def fetch_recipe_test_data():
+    """Find and return averaged test data matching the current recipe parameters."""
+    try:
+        params = request.get_json()
+        result = current_app.simulation_service.find_and_average_recipe_test_data(
+            current_user.id, params
+        )
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.error('Error fetching recipe test data: %s', e, exc_info=True)
+        return jsonify({'found': False, 'error': '服务器内部错误，请稍后重试'}), 500
 
 
 @bp.route('/generate_comparison_chart', methods=['POST'])

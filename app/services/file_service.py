@@ -31,13 +31,14 @@ class FileService:
         self.db = db
         self.file_handler = FileHandler()
 
-    def process_test_result_upload(self, file: FileStorage, user_id: int) -> Dict:
+    def process_test_result_upload(self, file: FileStorage, user_id: int, simulation_id=None) -> Dict:
         """
         Process uploaded test result file and save to database.
 
         Args:
             file: Uploaded file from request.files
             user_id: ID of the user uploading the file
+            simulation_id: Optional simulation ID to link this result to
 
         Returns:
             Dict: Success response with test_result_id and data
@@ -64,9 +65,18 @@ class FileService:
             # Load Excel data
             data_dict = self.file_handler.load_excel_data_as_dict(filepath)
 
+            # Resolve simulation_id
+            linked_sim_id = None
+            if simulation_id:
+                try:
+                    linked_sim_id = int(simulation_id)
+                except (ValueError, TypeError):
+                    pass
+
             # Create test result record
             test_result = TestResult(
                 user_id=user_id,
+                simulation_id=linked_sim_id,
                 filename=filename,
                 file_path=filepath,
                 data=json.dumps(data_dict)

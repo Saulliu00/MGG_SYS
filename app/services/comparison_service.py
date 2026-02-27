@@ -236,3 +236,37 @@ class ComparisonService:
             )
         except Exception as e:
             raise DataProcessingError(f'Error generating comparison chart: {str(e)}')
+
+    @staticmethod
+    def average_datasets(datasets: List[Dict]) -> Dict:
+        """
+        Interpolate multiple time-series datasets to a common timebase and
+        return the element-wise average.
+
+        Args:
+            datasets: List of dicts, each with 'time' and 'pressure' lists.
+                      Must contain at least one entry.
+
+        Returns:
+            Dict with 'time' and 'pressure' lists representing the average curve.
+        """
+        if len(datasets) == 1:
+            return datasets[0]
+
+        # Overlap region shared by all datasets
+        min_t = max(min(d['time']) for d in datasets)
+        max_t = min(max(d['time']) for d in datasets)
+        n_pts = max(len(d['time']) for d in datasets)
+
+        common_time = np.linspace(min_t, max_t, n_pts)
+
+        all_pressures = [
+            np.interp(common_time, d['time'], d['pressure'])
+            for d in datasets
+        ]
+        avg_pressure = np.mean(all_pressures, axis=0)
+
+        return {
+            'time': common_time.tolist(),
+            'pressure': avg_pressure.tolist()
+        }
