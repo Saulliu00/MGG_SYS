@@ -155,11 +155,6 @@
                 <div id="workOrderNumber" style="margin-top: 0.5rem; font-weight: bold; color: #667eea;"></div>
             </div>
 
-            <div class="form-group" style="margin-top: 1rem;">
-                <button type="button" class="btn btn-primary" style="width: 100%; padding: 0.65rem; font-size: 0.95rem;" onclick="runSimulation()">
-                    <i class="fas fa-play"></i> 计算
-                </button>
-            </div>
         </div>
 
         <!-- Right Panel - Results (操作与结果) -->
@@ -168,7 +163,7 @@
 
             <!-- Tab Buttons -->
             <div class="tab-buttons">
-                <button type="button" class="tab-btn active" onclick="switchTab('simulation')">
+                <button type="button" class="tab-btn active" onclick="switchTab('simulation'); runSimulation()">
                     <i class="fas fa-calculator"></i> 仿真
                 </button>
                 <button type="button" class="tab-btn" onclick="switchTab('actual')">
