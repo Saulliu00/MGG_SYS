@@ -76,6 +76,9 @@
                     <a href="{{ url_for('simulation.reverse') }}" class="menu-level-2-item">
                         <i class="fas fa-arrow-left"></i> 逆向
                     </a>
+                    <a href="{{ url_for('wp.index') }}" class="menu-level-2-item">
+                        <i class="fas fa-search"></i> 工单查询
+                    </a>
                     {% endif %}
                     {% if current_user.role == 'admin' or current_user.role == 'lab_engineer' %}
                     <a href="{{ url_for('simulation.history') }}" class="menu-level-2-item">

@@ -165,6 +165,63 @@ class Plotter:
             'pressure': first_trace.get('y', [])
         }
 
+    # Colour palette for multi-run charts (cycles if more runs than colours)
+    _MULTI_RUN_COLORS = [
+        'rgb(66, 126, 234)',   # blue
+        'rgb(231, 76, 60)',    # red
+        'rgb(46, 204, 113)',   # green
+        'rgb(230, 126, 34)',   # orange
+        'rgb(155, 89, 182)',   # purple
+        'rgb(26, 188, 156)',   # teal
+        'rgb(241, 196, 15)',   # amber
+        'rgb(52, 73, 94)',     # dark slate
+    ]
+
+    @staticmethod
+    def create_multi_run_chart(datasets: List[Dict], labels: List[str]) -> Dict:
+        """
+        Create a chart overlaying multiple experimental runs.
+
+        Args:
+            datasets: List of {'time': [...], 'pressure': [...]} dicts
+            labels: Display name for each run (e.g. filename), same length as datasets
+
+        Returns:
+            Dict: Plotly figure as JSON-serializable dict
+        """
+        colors = Plotter._MULTI_RUN_COLORS
+        traces = []
+        for i, (ds, label) in enumerate(zip(datasets, labels)):
+            if not ds.get('time') or not ds.get('pressure'):
+                continue
+            color = colors[i % len(colors)]
+            traces.append(go.Scatter(
+                x=ds['time'],
+                y=ds['pressure'],
+                mode='lines',
+                name=label,
+                line={'color': color, 'width': 2}
+            ))
+
+        layout_config = {
+            **DEFAULT_LAYOUT,
+            'xaxis': AXIS_CONFIG['xaxis'],
+            'yaxis': AXIS_CONFIG['yaxis'],
+            'legend': LEGEND_CONFIG,
+        }
+
+        if not traces:
+            layout_config['annotations'] = [{
+                'text': '暂无实验数据',
+                'xref': 'paper', 'yref': 'paper',
+                'x': 0.5, 'y': 0.5,
+                'showarrow': False,
+                'font': {'size': 16, 'color': '#7f8c8d'}
+            }]
+
+        fig = go.Figure(data=traces, layout=go.Layout(**layout_config))
+        return fig.to_dict()
+
     @staticmethod
     def merge_layout_with_overrides(base_layout: Dict, overrides: Dict) -> Dict:
         """

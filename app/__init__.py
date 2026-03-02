@@ -91,10 +91,11 @@ def create_app():
     login_manager.login_message = '请先登录以访问此页面'
 
     # Initialize services and attach to app
-    from app.services import SimulationService, FileService, ComparisonService
+    from app.services import SimulationService, FileService, ComparisonService, WorkOrderService
     app.simulation_service = SimulationService(db)
     app.file_service = FileService(db)
     app.comparison_service = ComparisonService()
+    app.work_order_service = WorkOrderService(db)
 
     # Generate system logos if they don't exist
     try:
@@ -122,11 +123,13 @@ def create_app():
 
     # Register blueprints
     from app.routes import auth, main, admin, simulation
+    from app.routes import work_order
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
     app.register_blueprint(admin.bp)
     app.register_blueprint(simulation.bp)
+    app.register_blueprint(work_order.wp)
 
     # Create database tables
     with app.app_context():

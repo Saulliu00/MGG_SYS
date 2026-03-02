@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}工单查询 - MGG仿真系统{% endblock %}
+
+{% block content %}
+{# Pass current user id to JS safely #}
+<script>
+    const CURRENT_USER_ID = {{ current_user.id | tojson }};
+</script>
+
+<div class="main-container">
+    <div class="simulation-container">
+
+        <!-- Left Panel: Work Order List -->
+        <div class="panel parameters-panel" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="panel-title">工单查询</div>
+
+            <!-- Search box -->
+            <div style="padding:0 0.5rem 0.75rem;">
+                <div style="position:relative;">
+                    <i class="fas fa-search" style="position:absolute; left:0.65rem; top:50%;
+                       transform:translateY(-50%); color:#7f8c8d; font-size:0.85rem;"></i>
+                    <input id="woSearchInput" type="text" placeholder="搜索工单号..."
+                           oninput="filterWorkOrders(this.value)"
+                           style="width:100%; padding:0.45rem 0.6rem 0.45rem 2rem;
+                                  border:1px solid #dce1e7; border-radius:8px;
+                                  font-size:0.88rem; outline:none;">
+                </div>
+            </div>
+
+            <!-- Work order list -->
+            <div id="workOrderList" style="flex:1; overflow-y:auto; padding:0 0.25rem;">
+                <div style="color:#7f8c8d; text-align:center; padding:2rem; font-size:0.9rem;">
+                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Panel: PT Curve Chart -->
+        <div class="panel test-info-panel" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="panel-title" id="chartPanelTitle">PT 曲线</div>
+            <div class="chart-container" style="flex:1; display:flex; flex-direction:column;">
+                <div class="chart-header" id="chartSubtitle" style="font-size:0.82rem; color:#7f8c8d;">
+                    请在左侧选择工单
+                </div>
+                <div id="woChartDiv" style="flex:1; min-height:0;"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Statistics -->
+        <div class="panel results-panel" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="panel-title">统计分析</div>
+            <div id="statsPanel" style="flex:1; overflow-y:auto; padding:0.5rem;">
+                <div style="color:#7f8c8d; text-align:center; padding:3rem; font-size:0.9rem;">
+                    <i class="fas fa-chart-bar" style="font-size:2rem; margin-bottom:0.75rem; display:block; opacity:0.4;"></i>
+                    请在左侧选择一个工单
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/work_order.js') }}"></script>
+{% endblock %}

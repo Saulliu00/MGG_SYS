@@ -36,6 +36,7 @@ from .subprocess_runner import SubprocessRunner
 from .plotter import Plotter
 from .logo_generator import LogoGenerator
 from .log_manager import log_manager, LogManager
+from .decorators import research_required, lab_required
 
 __all__ = [
     # Paths
@@ -73,4 +74,8 @@ __all__ = [
     'LogoGenerator',
     'LogManager',
     'log_manager',
+
+    # Decorators
+    'research_required',
+    'lab_required',
 ]
