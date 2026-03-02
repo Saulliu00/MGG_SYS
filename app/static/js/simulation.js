@@ -114,19 +114,126 @@ function plotSimulationChart() {
     Plotly.newPlot(chartDiv, simulationPlotData.data, simulationPlotData.layout, {responsive: true});
 }
 
-// Upload test result
-async function uploadTestResult() {
-    const fileInput = document.getElementById('testFileInput');
-    const file = fileInput.files[0];
+// Pending file waiting for user confirmation
+let pendingFile = null;
 
-    if (!file) {
-        alert('请选择要上传的文件');
+// --- PARAM VALIDATION (client-side) ---
+function checkTestParams() {
+    const form = document.getElementById('simulationForm');
+    const formData = new FormData(form);
+    const errors = [];
+
+    const selectLabels = {
+        ignition_model: '点火具型号', nc_type_1: 'NC类型1', nc_type_2: 'NC类型2',
+        gp_type: 'GP类型', shell_model: '管壳高度', current: '电流',
+        sensor_model: '传感器量程', body_model: '容积'
+    };
+    for (const [field, label] of Object.entries(selectLabels)) {
+        const val = formData.get(field);
+        if (!val || val === '__custom__') {
+            errors.push(`${label} 未填写完整`);
+        }
+    }
+
+    const nc1 = parseFloat(formData.get('nc_usage_1') || '0');
+    if (nc1 <= 0) errors.push('NC用量1 必须大于 0');
+
+    return errors;
+}
+
+// --- STEP 1: file selected → validate, then show preview + buttons ---
+async function validateAndPreviewUpload(file) {
+    const label = document.getElementById('uploadLabel');
+    label.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x"></i>'
+        + '<p>正在检查文件...</p>';
+
+    // Client-side param check
+    const paramErrors = checkTestParams();
+    if (paramErrors.length > 0) {
+        _resetUploadLabel();
+        _showUploadErrors(['测试参数检查未通过：', ...paramErrors]);
         return;
     }
 
+    // Server-side file format check
     const formData = new FormData();
     formData.append('file', file);
-    // Link this upload to the current simulation so recipe matching works later
+
+    try {
+        const response = await fetch('/simulation/validate_upload', {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()},
+            body: formData
+        });
+        const result = await response.json();
+
+        if (result.valid) {
+            pendingFile = file;
+            _showUploadPreview(file.name, result.stats);
+        } else {
+            _resetUploadLabel();
+            _showUploadErrors(result.errors || ['文件格式校验失败']);
+        }
+    } catch (error) {
+        console.error('Error during validation:', error);
+        _resetUploadLabel();
+        _showUploadErrors(['文件检查过程中发生错误，请重试']);
+    }
+}
+
+function _showUploadPreview(filename, stats) {
+    const label = document.getElementById('uploadLabel');
+    label.innerHTML = '<i class="fas fa-file-excel fa-2x" style="color:#27ae60"></i>'
+        + `<p style="color:#27ae60;font-weight:bold;">${filename}</p>`
+        + '<p style="font-size:0.85rem;color:#7f8c8d;">确认参数后点击「确认上传」</p>';
+
+    const previewInfo = document.getElementById('uploadPreviewInfo');
+    previewInfo.innerHTML =
+        `<strong><i class="fas fa-check-circle" style="color:#27ae60"></i> 文件校验通过</strong><br>`
+        + `数据行数：<strong>${stats.rows}</strong> 行&emsp;`
+        + `时间范围：<strong>${stats.time_range[0]} ~ ${stats.time_range[1]} ms</strong>&emsp;`
+        + `压力范围：<strong>${stats.pressure_range[0]} ~ ${stats.pressure_range[1]} MPa</strong>`;
+
+    document.getElementById('uploadValidationErrors').style.display = 'none';
+    document.getElementById('uploadPreviewArea').style.display = 'block';
+    document.getElementById('confirmUploadBtn').disabled = false;
+}
+
+function _showUploadErrors(errors) {
+    const errDiv = document.getElementById('uploadValidationErrors');
+    errDiv.innerHTML = '<strong><i class="fas fa-times-circle"></i> 校验未通过</strong><br>'
+        + errors.map(e => `• ${e}`).join('<br>');
+    errDiv.style.display = 'block';
+    document.getElementById('uploadPreviewInfo').innerHTML = '';
+    document.getElementById('uploadPreviewArea').style.display = 'block';
+    document.getElementById('confirmUploadBtn').disabled = true;
+}
+
+function _resetUploadLabel() {
+    const label = document.getElementById('uploadLabel');
+    label.innerHTML = '<i class="fas fa-cloud-upload-alt fa-3x"></i>'
+        + '<p>点击上传测试数据文件 (.xlsx)</p>'
+        + '<p style="font-size:0.9rem;color:#7f8c8d;">文件应包含时间和压力两列数据</p>';
+}
+
+// --- STEP 2a: cancel ---
+function cancelUpload() {
+    pendingFile = null;
+    document.getElementById('testFileInput').value = '';
+    document.getElementById('uploadPreviewArea').style.display = 'none';
+    _resetUploadLabel();
+}
+
+// --- STEP 2b: confirm → persist to DB ---
+async function confirmUpload() {
+    if (!pendingFile) return;
+
+    const btn = document.getElementById('confirmUploadBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上传中...';
+
+    const formData = new FormData();
+    formData.append('file', pendingFile);
     if (simulationId) {
         formData.append('simulation_id', simulationId);
     }
@@ -137,22 +244,26 @@ async function uploadTestResult() {
             headers: {'X-CSRFToken': getCsrfToken()},
             body: formData
         });
-
         const result = await response.json();
 
         if (result.success) {
-            // Store test data arrays
             testData = result.data;
-
-            // Refresh comparison chart
+            pendingFile = null;
+            document.getElementById('uploadPreviewArea').style.display = 'none';
+            const label = document.getElementById('uploadLabel');
+            label.innerHTML = '<i class="fas fa-check-circle fa-2x" style="color:#27ae60"></i>'
+                + `<p style="color:#27ae60;font-weight:bold;">已存储：${result.filename || ''}</p>`
+                + '<p style="font-size:0.85rem;color:#7f8c8d;">点击可重新上传</p>';
             plotComparisonChart();
-
-            alert('测试数据上传成功！');
         } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> 确认上传';
             alert('上传失败：' + result.message);
         }
     } catch (error) {
         console.error('Error:', error);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> 确认上传';
         alert('上传过程中发生错误');
     }
 }
@@ -227,7 +338,7 @@ function showNoTestDataModal() {
                                border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:bold;">
                     <i class="fas fa-upload"></i> 前往上传
                 </button>
-                <button onclick="document.getElementById('noTestDataModal').remove();"
+                <button onclick="document.getElementById('noTestDataModal').remove(); initializeChart('comparisonChart', 'comparison');"
                         style="background:#ecf0f1;color:#2c3e50;border:none;padding:0.55rem 1.4rem;
                                border-radius:8px;cursor:pointer;font-size:0.9rem;">
                     关闭
@@ -240,7 +351,10 @@ function showNoTestDataModal() {
 
     // Close when clicking the overlay background
     overlay.addEventListener('click', function(e) {
-        if (e.target === overlay) overlay.remove();
+        if (e.target === overlay) {
+            overlay.remove();
+            initializeChart('comparisonChart', 'comparison');
+        }
     });
 }
 
@@ -399,14 +513,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const fileInput = document.getElementById('testFileInput');
     if (fileInput) {
         fileInput.addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name;
-            if (fileName) {
-                const label = document.querySelector('.upload-label');
-                if (label) {
-                    label.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在上传 ' + fileName + '...';
-                }
-                // Trigger the actual upload
-                uploadTestResult();
+            const file = e.target.files[0];
+            if (file) {
+                validateAndPreviewUpload(file);
             }
         });
     }

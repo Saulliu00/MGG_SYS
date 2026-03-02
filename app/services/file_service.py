@@ -96,6 +96,26 @@ class FileService:
             self.file_handler.delete_file(filepath)
             raise DataProcessingError(f'{ERROR_MESSAGES["file_parse_error"]}: {str(e)}')
 
+    def validate_upload_file(self, file: FileStorage) -> Dict:
+        """
+        Save file to temp directory, validate it, then delete the temp file.
+
+        Returns the validation result dict from FileHandler.validate_test_data_file.
+        """
+        temp_dir = get_temp_directory()
+        ensure_directory_exists(temp_dir)
+
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join(temp_dir, filename)
+        file.save(temp_path)
+
+        try:
+            result = self.file_handler.validate_test_data_file(temp_path)
+        finally:
+            self.file_handler.delete_file(temp_path)
+
+        return result
+
     def save_to_demo_data_folder(self, file: FileStorage, nc_value: str, custom_name: str = None) -> Dict:
         """
         Save uploaded file to demo/data folder with custom naming (no authentication required).

@@ -86,11 +86,22 @@ class FileHandler:
             DataProcessingError: If file cannot be read or parsed
         """
         try:
-            df = pd.read_excel(file_path, skiprows=skip_rows)
+            df = pd.read_excel(file_path, skiprows=skip_rows, header=None)
 
-            # Assume first column is time, second column is pressure
-            time_data = df.iloc[:, 0].tolist()
-            pressure_data = df.iloc[:, 1].tolist()
+            # Assume first column is time, second column is pressure.
+            # Drop any rows where either column is not a real number
+            # (catches header/comment rows like '[ms]', '注释', etc.)
+            col_t = df.iloc[:, 0]
+            col_p = df.iloc[:, 1]
+            numeric_mask = (
+                pd.to_numeric(col_t, errors='coerce').notna() &
+                pd.to_numeric(col_p, errors='coerce').notna()
+            )
+            time_data = pd.to_numeric(col_t[numeric_mask], errors='coerce').tolist()
+            pressure_data = pd.to_numeric(col_p[numeric_mask], errors='coerce').tolist()
+
+            if not time_data:
+                raise DataProcessingError('文件中未找到有效的数值数据，请检查文件格式')
 
             return time_data, pressure_data
 
@@ -98,6 +109,84 @@ class FileHandler:
             raise DataProcessingError(f'File not found: {file_path}')
         except Exception as e:
             raise DataProcessingError(f'{ERROR_MESSAGES["file_parse_error"]}: {str(e)}')
+
+    @staticmethod
+    def validate_test_data_file(file_path: str) -> dict:
+        """
+        Validate an Excel test-data file WITHOUT saving to the database.
+
+        Rules:
+          - Exactly 2 columns after stripping non-numeric header rows
+          - Column 1 (time) first value must be 0 or close to 0 (≤ 1.0)
+          - Column 1 (time) must be monotonically non-decreasing
+          - At least 2 numeric data rows must be present
+
+        Returns:
+            dict with keys:
+              valid   (bool)
+              errors  (list[str])  – non-empty when valid is False
+              stats   (dict)       – present when valid is True:
+                        rows, time_range [min, max], pressure_range [min, max]
+        """
+        try:
+            df = pd.read_excel(file_path, header=None)
+
+            # Column count check (before stripping header rows)
+            if df.shape[1] < 2:
+                return {'valid': False, 'errors': ['文件必须包含2列数据（时间列和压力列）']}
+            if df.shape[1] > 2:
+                return {
+                    'valid': False,
+                    'errors': [f'文件包含 {df.shape[1]} 列，请确保只有2列数据（时间列和压力列）']
+                }
+
+            # Strip non-numeric header rows
+            col_t = df.iloc[:, 0]
+            col_p = df.iloc[:, 1]
+            numeric_mask = (
+                pd.to_numeric(col_t, errors='coerce').notna() &
+                pd.to_numeric(col_p, errors='coerce').notna()
+            )
+            time_data = pd.to_numeric(col_t[numeric_mask], errors='coerce').tolist()
+            pressure_data = pd.to_numeric(col_p[numeric_mask], errors='coerce').tolist()
+
+            if len(time_data) < 2:
+                return {'valid': False, 'errors': ['文件中有效数值行数不足，请检查文件内容']}
+
+            # Column 1 must start from near 0
+            if time_data[0] > 1.0:
+                return {
+                    'valid': False,
+                    'errors': [f'时间列第一个值为 {time_data[0]:.4f}，必须从 0 开始']
+                }
+
+            # Column 1 must be non-decreasing
+            for i in range(len(time_data) - 1):
+                if time_data[i] > time_data[i + 1]:
+                    return {
+                        'valid': False,
+                        'errors': [
+                            f'时间列在第 {i + 2} 行出现下降（{time_data[i]:.4f} → '
+                            f'{time_data[i+1]:.4f}），时间列必须单调递增'
+                        ]
+                    }
+
+            return {
+                'valid': True,
+                'stats': {
+                    'rows': len(time_data),
+                    'time_range': [round(time_data[0], 4), round(time_data[-1], 4)],
+                    'pressure_range': [
+                        round(min(pressure_data), 4),
+                        round(max(pressure_data), 4)
+                    ]
+                }
+            }
+
+        except FileNotFoundError:
+            return {'valid': False, 'errors': ['文件未找到，请重新上传']}
+        except Exception as e:
+            return {'valid': False, 'errors': [f'文件解析失败：{str(e)}']}
 
     @staticmethod
     def load_excel_data_as_dict(file_path: str, skip_rows=0) -> dict:

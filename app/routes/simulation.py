@@ -323,6 +323,23 @@ def load_test_data():
         }), 500
 
 
+@bp.route('/validate_upload', methods=['POST'])
+@login_required
+def validate_upload():
+    """Validate an uploaded test-data file without persisting it to the database."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'valid': False, 'errors': ['未收到文件']})
+
+        file = request.files['file']
+        result = current_app.file_service.validate_upload_file(file)
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.error('File validation error: %s', e, exc_info=True)
+        return jsonify({'valid': False, 'errors': ['服务器内部错误，请稍后重试']}), 500
+
+
 @bp.route('/fetch_recipe_test_data', methods=['POST'])
 @login_required
 def fetch_recipe_test_data():

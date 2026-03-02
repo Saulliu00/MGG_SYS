@@ -19,9 +19,35 @@ class SimulationService:
         """
         self.db = db
 
+    # Recipe fields that define a unique simulation (excludes metadata)
+    _RECIPE_STRING_FIELDS = (
+        'ignition_model', 'nc_type_1', 'nc_type_2',
+        'gp_type', 'shell_model', 'sensor_model', 'body_model'
+    )
+    _RECIPE_NUMERIC_FIELDS = ('nc_usage_1', 'nc_usage_2', 'gp_usage', 'current')
+
+    def _build_recipe_query(self, params: Dict):
+        """Return a Simulation query filtered by recipe fields (cross-user)."""
+        query = Simulation.query
+        for field in self._RECIPE_STRING_FIELDS:
+            value = params.get(field)
+            if value:
+                query = query.filter(getattr(Simulation, field) == value)
+        for field in self._RECIPE_NUMERIC_FIELDS:
+            raw = params.get(field)
+            if raw not in (None, '', 'None'):
+                try:
+                    query = query.filter(getattr(Simulation, field) == float(raw))
+                except (ValueError, TypeError):
+                    pass
+        return query
+
     def run_forward_simulation(self, user_id: int, params: Dict) -> Dict:
         """
         Run forward simulation with provided parameters.
+
+        If a simulation with the same recipe already exists (any user), the stored
+        result is reused — no new record is created and no inference is run.
 
         Args:
             user_id: ID of the user running the simulation
@@ -32,13 +58,23 @@ class SimulationService:
 
         Raises:
             SimulationError: If simulation fails
-            SubprocessTimeoutError: If simulation times out
         """
         try:
-            # Extract NC usage value
             nc_usage_1 = float(params.get('nc_usage_1', 0))
 
-            # Create new simulation record
+            # Reuse existing simulation if recipe already exists (lab-wide dedup)
+            existing = self._build_recipe_query(params).first()
+            if existing and existing.result_data:
+                try:
+                    return {
+                        'success': True,
+                        'simulation_id': existing.id,
+                        'data': json.loads(existing.result_data)
+                    }
+                except (json.JSONDecodeError, TypeError):
+                    pass  # corrupted result_data — fall through to create a fresh one
+
+            # No existing record: run inference and persist
             simulation = Simulation(
                 user_id=user_id,
                 ignition_model=params.get('ignition_model'),
@@ -59,10 +95,8 @@ class SimulationService:
                 work_order=params.get('work_order')
             )
 
-            # Run inference in-process using the loaded ML model
             response_data = run_forward_inference(nc_usage_1)
 
-            # Save result to database
             simulation.result_data = json.dumps(response_data)
             self.db.session.add(simulation)
             self.db.session.commit()
@@ -169,37 +203,16 @@ class SimulationService:
     def find_and_average_recipe_test_data(self, user_id: int, params: Dict) -> Dict:
         """
         Find all test results whose parent simulation matches the given recipe
-        parameters, then return an averaged time-series.
+        parameters (cross-user), then return an averaged time-series.
+
+        user_id is retained in the signature for future audit use but is not
+        applied as a DB filter — recipes are a lab-wide concept.
 
         Returns:
             {'found': True,  'data': {'time': [...], 'pressure': [...]}, 'count': N}
             {'found': False} if no matching test data exists.
         """
-        # Build query for simulations that match the recipe
-        query = Simulation.query.filter_by(user_id=user_id)
-
-        # Numeric fields – compare as floats with a small tolerance
-        numeric_fields = ('nc_usage_1', 'nc_usage_2', 'gp_usage', 'current')
-        # String recipe fields (exclude metadata like employee_id, notes, work_order)
-        string_fields = (
-            'ignition_model', 'nc_type_1', 'nc_type_2',
-            'gp_type', 'shell_model', 'sensor_model', 'body_model'
-        )
-
-        for field in string_fields:
-            value = params.get(field)
-            if value:
-                query = query.filter(getattr(Simulation, field) == value)
-
-        for field in numeric_fields:
-            raw = params.get(field)
-            if raw not in (None, '', 'None'):
-                try:
-                    query = query.filter(getattr(Simulation, field) == float(raw))
-                except (ValueError, TypeError):
-                    pass
-
-        matching_sims = query.all()
+        matching_sims = self._build_recipe_query(params).all()
         if not matching_sims:
             return {'found': False}
 
