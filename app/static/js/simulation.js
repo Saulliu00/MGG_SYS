@@ -249,6 +249,8 @@ async function confirmUpload() {
         if (result.success) {
             testData = result.data;
             pendingFile = null;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> 确认上传';
             document.getElementById('uploadPreviewArea').style.display = 'none';
             const label = document.getElementById('uploadLabel');
             label.innerHTML = '<i class="fas fa-check-circle fa-2x" style="color:#27ae60"></i>'
