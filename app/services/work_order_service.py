@@ -54,15 +54,20 @@ class WorkOrderService:
               'statistics': {count, peaks, mean_p, std_p, cv_p, mean_t, std_t, cv_t}
             }
         """
-        sim = (
+        sims = (
             Simulation.query
             .filter_by(work_order=work_order)
-            .first()
+            .order_by(Simulation.created_at)
+            .all()
         )
-        if not sim:
+        if not sims:
             return {'found': False}
 
-        test_results = TestResult.query.filter_by(simulation_id=sim.id).all()
+        sim = sims[0]  # earliest sim for display metadata
+        sim_ids = [s.id for s in sims]
+        test_results = TestResult.query.filter(
+            TestResult.simulation_id.in_(sim_ids)
+        ).all()
 
         tr_list = []
         datasets = []

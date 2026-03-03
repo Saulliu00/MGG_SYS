@@ -1,32 +1,68 @@
 # MGG Simulation System
 
-**Gas Generator Simulation and Analysis Platform**  
-**Branch:** `db-optimized` (Hybrid Database Design)  
-**Version:** 3.0
+**Gas Generator Simulation and Analysis Platform**
+**Branch:** `db-optimized`
+**Last Updated:** 2026-03-02
 
 ---
 
-## 🎯 What This Branch Does
+## Overview
 
-This is the **optimized database branch** - a hybrid design combining:
-- ✅ **Simplicity** of embedded parameters (like DB_dev)
-- ✅ **Performance** of separated time series (like Master)
-- ✅ **Best practices** from both approaches
-
-### Key Improvements Over Other Branches:
-
-| Feature | db-optimized | Master | DB_dev |
-|---------|-------------|--------|---------|
-| **Time Series** | Separate tables ✅ | Separate tables ✅ | JSON blobs ❌ |
-| **Query Complexity** | Simple (no joins) ✅ | Complex (10+ joins) ❌ | Simple ✅ |
-| **Data Integrity** | CHECK constraints ✅ | FK constraints ✅ | Application-level ⚠️ |
-| **Setup Complexity** | Low ✅ | High ❌ | Low ✅ |
-| **Performance** | Excellent ✅ | Good ✅ | Poor on large datasets ❌ |
-| **Scalability** | High ✅ | Very High ✅ | Medium ⚠️ |
+MGG_SYS is a web-based platform for gas generator simulation, experimental data management, and statistical analysis. It supports forward/reverse simulation, PT curve comparison, and work order tracking across a multi-user lab environment.
 
 ---
 
-## 🚀 Quick Start
+## Features
+
+### 1. 正向仿真 (Forward Simulation) — 研发工程师
+- Input recipe parameters (ignition model, NC type/usage, GP type/usage, shell, current, sensor, volume, equipment)
+- Run ML-based pressure-time simulation
+- View PT curve result with Plotly chart
+- **Recipe deduplication:** if an identical recipe already exists in the database (any user), the stored result is returned instantly without re-running inference
+
+### 2. PT 曲线对比 (PT Curve Comparison) — 研发工程师
+- Upload experimental `.xlsx` test data (two-column format: time ms, pressure MPa)
+- Two-step validation before committing to database
+- Overlay simulated vs experimental PT curves
+- **Cross-user data pooling:** test data from all users with the same recipe is averaged for comparison
+
+### 3. 逆向仿真 (Reverse Simulation) — 研发工程师
+- Input target peak pressure to predict NC usage
+- ML-based reverse inference
+
+### 4. 工单查询 (Work Order Query) — 研发工程师
+Three-column interface for browsing all work orders in the lab:
+
+| Column | Content |
+|--------|---------|
+| Left | All work orders with real-time search filter |
+| Middle | PT curves — all experimental runs for the selected work order overlaid on one chart, one colour per run |
+| Right | Statistical summary: peak pressure and peak time per run, plus mean / std / CV across runs when multiple runs exist |
+
+**Access control:**
+- All 研发工程师 users can read all work orders (lab-wide visibility)
+- Each user can only delete their own test result records (identified by `TestResult.user_id`)
+
+### 5. 实验记录 (Experiment History) — 实验室工程师
+- View uploaded experiment file history
+
+### 6. 管理员 (Admin Panel) — admin
+- User management: create, edit, activate/deactivate, force logout
+- Role assignment: `admin`, `research_engineer`, `lab_engineer`
+
+---
+
+## User Roles
+
+| Role | 正向仿真 | PT 曲线对比 | 逆向仿真 | 工单查询 | 实验记录 | 管理员 |
+|------|---------|------------|---------|---------|---------|--------|
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `research_engineer` | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `lab_engineer` | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+
+---
+
+## Quick Start
 
 ### 1. Clone & Setup
 ```bash
@@ -34,411 +70,171 @@ git clone https://github.com/Saulliu00/MGG_SYS.git
 cd MGG_SYS
 git checkout db-optimized
 
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Initialize Database
-```python
-from app import create_app
-from database.manager import init_database
-
-app = create_app()
-init_database(app)
+### 2. Set Environment Variables
+```bash
+export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+# Optional — set your own admin password:
+export ADMIN_PASSWORD=your_secure_password
 ```
 
-### 3. Login
-- **URL:** http://localhost:5000
-- **Default Admin:** `admin / admin123`
-- ⚠️ **Change password immediately!**
+### 3. Run
+```bash
+python run.py
+```
+The server starts on `http://0.0.0.0:5000` (accessible on the local network).
+On first launch, a default admin account is created and the password is printed to the console.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 MGG_SYS/
-├── app/                    # Flask application
-│   ├── __init__.py
-│   ├── routes/            # Route handlers
-│   ├── services/          # Business logic
-│   ├── templates/         # HTML templates
-│   └── static/            # CSS, JS, images
+├── app/
+│   ├── __init__.py              # App factory, service wiring, blueprint registration
+│   ├── models.py                # SQLAlchemy models (User, Simulation, TestResult)
+│   ├── routes/
+│   │   ├── auth.py              # Login / logout
+│   │   ├── main.py              # Home page
+│   │   ├── admin.py             # Admin panel
+│   │   ├── simulation.py        # Forward/reverse simulation, upload
+│   │   └── work_order.py        # 工单查询 API endpoints
+│   ├── services/
+│   │   ├── simulation_service.py  # Forward sim, recipe dedup, reverse prediction
+│   │   ├── file_service.py        # Excel upload, validation, storage
+│   │   ├── comparison_service.py  # PT comparison, peak detection
+│   │   └── work_order_service.py  # Work order list, detail, statistics, delete
+│   ├── utils/
+│   │   ├── decorators.py        # research_required, lab_required role guards
+│   │   ├── plotter.py           # Plotly chart generation (single/comparison/multi-run)
+│   │   ├── file_handler.py      # Excel parsing and validation
+│   │   └── ...
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── simulation/          # index.html (正向), reverse.html (逆向)
+│   │   └── work_order/          # index.html (工单查询)
+│   ├── static/
+│   │   ├── css/style.css
+│   │   └── js/
+│   │       ├── simulation.js    # 正向仿真 frontend
+│   │       └── work_order.js    # 工单查询 frontend
+│   └── config/
+│       ├── plot_config.py       # Plotly layout/colour constants
+│       └── network_config.py    # CORS, session, rate-limit settings
 │
-├── database/              # ⭐ Database layer (NEW)
-│   ├── models.py         # SQLAlchemy ORM models
-│   ├── schema.sql        # Database schema (DDL)
-│   ├── extensions.py     # Flask extensions (db, auth, bcrypt)
-│   ├── manager.py        # Init, migrations, seeding
-│   ├── README.md         # Full database documentation
-│   ├── QUICKSTART.md     # 5-minute setup guide
-│   └── requirements.txt  # Database dependencies
+├── database/
+│   └── README.md                # Database schema documentation
 │
-├── instance/              # Instance-specific files
-│   └── mgg.db            # SQLite database (auto-created)
+├── instance/
+│   └── simulation_system.db     # SQLite database (auto-created)
 │
-├── config.py              # App configuration
-├── run.py                 # Application entry point
-├── requirements.txt       # All dependencies
-└── README.md             # This file
+├── run.py                       # Entry point
+└── requirements.txt
 ```
 
 ---
 
-## 🗄️ Database Design
+## Database Schema
 
-### Schema Overview
+Three tables power the application (see [`database/README.md`](database/README.md) for full detail):
 
-**8 Core Tables:**
-1. **user** - Authentication & authorization
-2. **recipe** - Reusable parameter sets
-3. **work_order** - Test sessions (link recipes to tests)
-4. **simulation** - Simulation runs (summary)
-5. **simulation_time_series** - P-T data (detailed)
-6. **test_result** - Experimental data (summary)
-7. **test_time_series** - P-T data from experiments
-8. **pt_comparison** - Simulation vs experimental comparison
+### `user`
+Stores credentials and role. Roles: `admin`, `research_engineer`, `lab_engineer`.
 
-### Key Relationships
+### `simulation`
+One row per recipe run. Stores all recipe parameters inline alongside the work order number and JSON-encoded simulation result.
 
-```
-User ─┬─► Recipe ──► WorkOrder ─┬─► Simulation ──► SimulationTimeSeries
-      │                          │
-      │                          ├─► TestResult ──► TestTimeSeries
-      │                          │
-      │                          └─► ExperimentFile
-      │
-      └─► PTComparison (Sim ↔ Test)
-```
+| Key fields | Description |
+|-----------|-------------|
+| `work_order` | Work order number string (links to 工单查询) |
+| `ignition_model`, `nc_type_1`, `nc_usage_1`, … | Recipe parameters |
+| `result_data` | JSON: `{time: [...], pressure: [...]}` from simulation |
 
-### Why This Design?
+**Recipe deduplication:** before running the ML model, `SimulationService` queries for an existing simulation with identical recipe parameters (all users). If found, the stored result is returned.
 
-**Problem with normalized approach (Master):**
-- Every query needs 10+ joins
-- Complex setup (populate lookup tables first)
-- Over-engineered for static parameter types
+### `test_result`
+One row per uploaded `.xlsx` file. Stores the parsed data as JSON and links back to a simulation (and therefore a work order).
 
-**Problem with denormalized approach (DB_dev):**
-- Time series data in JSON blobs
-- Can't query individual time points
-- Poor performance on large datasets
-- No pagination support
-
-**Solution (db-optimized):**
-- ✅ Simple embedded parameters (strings with CHECK constraints)
-- ✅ Separated time series tables (efficient querying)
-- ✅ Recipe abstraction (reusability without duplication)
-- ✅ Strategic indexes (optimized access patterns)
-
-**Read more:** [`database/README.md`](database/README.md)
+| Key fields | Description |
+|-----------|-------------|
+| `simulation_id` | FK → `simulation.id` (connects the run to a work order) |
+| `user_id` | Who uploaded the file (governs delete permission) |
+| `filename`, `file_path` | Original filename and disk path |
+| `data` | JSON: `{time: [...], pressure: [...]}` from the xlsx |
 
 ---
 
-## 💻 Usage Examples
+## 工单查询 — Technical Notes
 
-### Create & Run Simulation
+**Backend (`WorkOrderService`):**
+- `get_all_work_orders()` — returns all simulations with a non-empty `work_order`, newest first, with a recipe summary string
+- `get_work_order_detail(work_order)` — finds **all** simulations sharing the same work_order string, collects all their linked test results, builds a multi-run Plotly chart and computes statistics
+- `_compute_statistics(datasets, labels)` — per-run peak pressure/time via `ComparisonService.find_peak_pressure()`, then NumPy mean/std (ddof=1)/CV
+- `delete_test_result(id, user_id)` — only deletes if `TestResult.user_id == user_id`; also removes the file from disk
 
-```python
-from database.models import User, Recipe, WorkOrder, Simulation, SimulationTimeSeries
-from database.extensions import db
-
-# 1. Get or create recipe
-recipe = Recipe(
-    user_id=user.id,
-    recipe_name='Standard Config',
-    ignition_model='Type-A',
-    nc_type_1='NC-Standard',
-    nc_usage_1=20.0,
-    # ... more parameters
-)
-db.session.add(recipe)
-db.session.commit()
-
-# 2. Create work order
-wo = WorkOrder(
-    work_order_number='WO-2026-001',
-    recipe_id=recipe.id,
-    user_id=user.id,
-    test_name='Baseline Validation',
-    status='in_progress'
-)
-db.session.add(wo)
-db.session.flush()
-
-# 3. Run simulation (your simulation code here)
-time_data, pressure_data = run_simulation(recipe)
-
-# 4. Save simulation results
-sim = Simulation(
-    user_id=user.id,
-    work_order_id=wo.id,
-    test_name='Run #1',
-    peak_pressure=max(pressure_data),
-    peak_time=time_data[pressure_data.index(max(pressure_data))],
-    num_data_points=len(time_data),
-    status='completed'
-)
-db.session.add(sim)
-db.session.flush()
-
-# 5. Save time series (critical: use separate table!)
-for i, (t, p) in enumerate(zip(time_data, pressure_data)):
-    point = SimulationTimeSeries(
-        simulation_id=sim.id,
-        time_point=t,
-        pressure=p,
-        sequence_number=i + 1
-    )
-    db.session.add(point)
-
-db.session.commit()
-```
-
-### Query Time Series Efficiently
-
-```python
-# Get paginated results (handles millions of points)
-page = 1
-page_size = 1000
-points = SimulationTimeSeries.query \
-    .filter_by(simulation_id=sim.id) \
-    .order_by(SimulationTimeSeries.sequence_number) \
-    .offset((page - 1) * page_size) \
-    .limit(page_size) \
-    .all()
-
-# Get time range around peak
-peak_time = sim.peak_time
-window = 10  # ±10ms
-peak_region = SimulationTimeSeries.query \
-    .filter_by(simulation_id=sim.id) \
-    .filter(SimulationTimeSeries.time_point.between(
-        peak_time - window, 
-        peak_time + window
-    )) \
-    .all()
-```
-
-**More examples:** [`database/QUICKSTART.md`](database/QUICKSTART.md)
+**Frontend (`work_order.js`):**
+- On page load: renders empty chart axes (no placeholder text)
+- On work order click: fetches `/work_order/<wo>/detail`, calls `Plotly.newPlot` with server-rendered traces, renders statistics table
+- Client-side search filter on the work order list (no extra round-trips)
+- All user-controlled data escaped via `_escapeHtml()` / `JSON.stringify()` before DOM insertion
 
 ---
 
-## 🔧 Configuration
+## Uploading Test Data (`.xlsx` Format)
 
-### SQLite (Development - Default)
-```python
-# config.py
-SQLALCHEMY_DATABASE_URI = 'sqlite:///instance/mgg.db'
-```
+Files must be exactly two columns, no required header:
 
-**Pros:**
-- ✅ Zero setup
-- ✅ Single file database
-- ✅ Fast for development
+| Column A | Column B |
+|----------|----------|
+| Time (ms) | Pressure (MPa) |
+| 0.000 | 0.012 |
+| 0.005 | 0.024 |
+| … | … |
 
-**Limitations:**
-- ⚠️ ~10-20 concurrent users max
-- ⚠️ No built-in replication
-
----
-
-### PostgreSQL (Production - Recommended)
-```python
-# config.py
-SQLALCHEMY_DATABASE_URI = 'postgresql://user:password@localhost/mgg_db'
-```
-
-**Pros:**
-- ✅ 100+ concurrent users
-- ✅ Advanced features
-- ✅ Replication support
-- ✅ Better performance at scale
-
-**Migration:**
-1. Schema is compatible (no changes needed!)
-2. Export data from SQLite
-3. Import to PostgreSQL
-4. Update connection string
+Rules enforced at upload:
+- Exactly 2 columns
+- First time value ≤ 1.0 ms (must start near zero)
+- Time column monotonically non-decreasing
+- At least 2 numeric rows
 
 ---
 
-## 📊 Performance
+## Security
 
-### Benchmarks (100,000 time points)
-
-| Operation | db-optimized | DB_dev (JSON) | Speedup |
-|-----------|-------------|---------------|---------|
-| Insert | 2.3s | 15.1s | **6.5x faster** |
-| Query all | 1.1s | 8.7s | **7.9x faster** |
-| Query range | 0.05s | 8.7s | **174x faster** |
-| Pagination | 0.02s | N/A | **Instant** |
-
-**Why faster?**
-- Separated time series tables (database-level indexing)
-- No JSON parsing overhead
-- Efficient SQL filtering and sorting
+| Feature | Implementation |
+|---------|---------------|
+| Password hashing | Flask-Bcrypt |
+| Session management | Flask-Login with session token invalidation |
+| CSRF protection | Flask-WTF on all state-changing requests |
+| Role-based access | `@research_required` / `@lab_required` decorators |
+| XSS prevention | `_escapeHtml()` + `JSON.stringify` for all user data in DOM |
+| Rate limiting | Flask-Limiter |
+| SQL injection | SQLAlchemy ORM (parameterised queries) |
 
 ---
 
-## 🧪 Testing
+## Troubleshooting
 
-### Run Tests
+**No plot appears in 工单查询 after clicking a work order**
+Ensure the uploaded test result has a `simulation_id` that points to a simulation with the matching `work_order`. Test results uploaded without linking to a simulation will not appear.
+
+**"Database is locked" on SQLite**
+Increase the connection pool settings in `app/__init__.py`, or migrate to PostgreSQL for production workloads above ~20 concurrent users.
+
+**SECRET_KEY not set**
+The app refuses to start without `SECRET_KEY` set as an environment variable. Run:
 ```bash
-pytest tests/
+export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
 ```
 
-### Manual Testing Checklist
-- [ ] Create user
-- [ ] Create recipe
-- [ ] Create work order
-- [ ] Run simulation
-- [ ] Upload test data
-- [ ] Compare results
-- [ ] View charts
-
 ---
 
-## 🔒 Security
+## Contact
 
-### Built-in Features
-- ✅ **Bcrypt** password hashing
-- ✅ **Flask-Login** session management
-- ✅ **Role-based access** (admin, engineer, user)
-- ✅ **CSRF protection** (via Flask-WTF)
-- ✅ **SQL injection prevention** (via SQLAlchemy ORM)
-
-### Best Practices
-1. **Change default admin password** immediately
-2. Use **HTTPS** in production
-3. Set **strong SECRET_KEY** in config
-4. Enable **database backups**
-5. Review **user permissions** regularly
-
----
-
-## 🐛 Troubleshooting
-
-### "Database is locked"
-**Cause:** SQLite doesn't handle high concurrency well  
-**Solution 1:** WAL mode enabled (automatic)  
-**Solution 2:** Switch to PostgreSQL for production
-
-### "No such table: user"
-**Cause:** Database not initialized  
-**Solution:**
-```python
-from database.manager import init_database
-init_database(app)
-```
-
-### Slow queries on large datasets
-**Cause:** Not using separated time series tables properly  
-**Solution:** Use pagination, filter by time range, check indexes
-
-**More help:** [`database/README.md`](database/README.md)
-
----
-
-## 📚 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [`database/README.md`](database/README.md) | Full database documentation |
-| [`database/QUICKSTART.md`](database/QUICKSTART.md) | 5-minute setup guide |
-| [`database/schema.sql`](database/schema.sql) | Database schema (DDL) |
-| [`database/models.py`](database/models.py) | ORM model definitions |
-
----
-
-## 🔄 Branch Comparison
-
-### Which Branch Should I Use?
-
-**Use `db-optimized` if:**
-- ✅ You want best balance of simplicity & performance
-- ✅ Starting a new project
-- ✅ Need efficient time series handling
-- ✅ Want easy PostgreSQL migration path
-
-**Use `master` if:**
-- ✅ You need full normalization (lookup tables)
-- ✅ Parameters have complex properties (density, heat, etc.)
-- ✅ You have 50+ parameter types
-- ✅ You want hot-cold archiving built-in
-
-**Use `DB_dev` if:**
-- ✅ Quick prototyping only
-- ✅ Small datasets (<10,000 points per simulation)
-- ✅ Temporary/demo system
-
----
-
-## 🤝 Contributing
-
-### Branch Workflow
-```bash
-# Create feature branch from db-optimized
-git checkout db-optimized
-git pull
-git checkout -b feature/your-feature
-
-# Make changes, commit
-git add .
-git commit -m "Add feature: description"
-
-# Push and create PR
-git push origin feature/your-feature
-```
-
-### Code Style
-- Follow PEP 8 for Python
-- Use type hints where helpful
-- Document functions and classes
-- Write tests for new features
-
----
-
-## 📝 License
-
-[Your license here]
-
----
-
-## 📞 Support
-
-- **Documentation:** [`database/README.md`](database/README.md)
+- **Email:** saul.liu00@gmail.com
 - **Issues:** GitHub Issues
-- **Contact:** saul.liu00@gmail.com
-
----
-
-## 🗺️ Roadmap
-
-### Phase 1: Core Features ✅
-- [x] Database schema design
-- [x] User authentication
-- [x] Recipe management
-- [x] Simulation runs
-- [x] Time series storage
-
-### Phase 2: Analysis Tools
-- [ ] P-T comparison engine
-- [ ] Statistical analysis
-- [ ] Chart generation
-- [ ] Export functionality
-
-### Phase 3: Production Hardening
-- [ ] PostgreSQL migration
-- [ ] Automated backups
-- [ ] Monitoring & logging
-- [ ] Performance optimization
-
----
-
-**Last Updated:** 2026-02-23  
-**Database Version:** 3.0 (Optimized Hybrid)  
-**Branch:** db-optimized

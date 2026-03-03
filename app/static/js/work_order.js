@@ -16,7 +16,13 @@ function _escapeHtml(str) {
 // ── Initialisation ────────────────────────────────────────────────────────────
 
 window.addEventListener('load', function () {
-    initEmptyChart();
+    Plotly.newPlot('woChartDiv', [], {
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 60, r: 30, t: 30, b: 50 },
+        xaxis: { title: 'Time (ms)', gridcolor: '#e0e0e0', showgrid: true },
+        yaxis: { title: 'Pressure (MPa)', gridcolor: '#e0e0e0', showgrid: true }
+    }, { responsive: true });
     loadWorkOrders();
 });
 
@@ -96,7 +102,9 @@ async function selectWorkOrder(workOrder) {
     );
 
     // Show loading state
-    document.getElementById('chartSubtitle').textContent = '加载中...';
+    const subtitle = document.getElementById('chartSubtitle');
+    subtitle.style.display = '';
+    subtitle.textContent = '加载中...';
     document.getElementById('statsPanel').innerHTML =
         '<div style="color:#7f8c8d;text-align:center;padding:3rem;">' +
         '<i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i></div>';
@@ -127,24 +135,6 @@ async function selectWorkOrder(workOrder) {
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
-
-function initEmptyChart() {
-    const layout = {
-        xaxis: { title: 'Time (ms)', gridcolor: '#e0e0e0', showgrid: true },
-        yaxis: { title: 'Pressure (MPa)', gridcolor: '#e0e0e0', showgrid: true },
-        plot_bgcolor: 'white',
-        paper_bgcolor: 'white',
-        margin: { l: 60, r: 30, t: 30, b: 50 },
-        annotations: [{
-            text: '请在左侧选择工单',
-            xref: 'paper', yref: 'paper',
-            x: 0.5, y: 0.5,
-            showarrow: false,
-            font: { size: 16, color: '#7f8c8d' }
-        }]
-    };
-    Plotly.newPlot('woChartDiv', [], layout, { responsive: true });
-}
 
 function renderChart(chartJson) {
     Plotly.newPlot('woChartDiv', chartJson.data, chartJson.layout, { responsive: true });
@@ -280,10 +270,18 @@ function _showListError(msg) {
 }
 
 function _showDetailError(msg) {
-    document.getElementById('chartSubtitle').textContent = '加载失败';
+    const subtitle = document.getElementById('chartSubtitle');
+    subtitle.style.display = '';
+    subtitle.textContent = '加载失败';
     document.getElementById('statsPanel').innerHTML =
         `<div style="color:#e74c3c;text-align:center;padding:3rem;font-size:0.88rem;">
             <i class="fas fa-exclamation-circle"></i> ${msg}
         </div>`;
-    initEmptyChart();
+    Plotly.react('woChartDiv', [], {
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 60, r: 30, t: 30, b: 50 },
+        xaxis: { title: 'Time (ms)', gridcolor: '#e0e0e0', showgrid: true },
+        yaxis: { title: 'Pressure (MPa)', gridcolor: '#e0e0e0', showgrid: true }
+    });
 }

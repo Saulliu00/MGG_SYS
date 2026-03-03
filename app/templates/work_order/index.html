@@ -9,7 +9,7 @@
 </script>
 
 <div class="main-container">
-    <div class="simulation-container">
+    <div class="simulation-container" style="grid-template-columns: 1fr 3fr 0.4fr;">
 
         <!-- Left Panel: Work Order List -->
         <div class="panel parameters-panel" style="display:flex; flex-direction:column; overflow:hidden;">
@@ -40,9 +40,7 @@
         <div class="panel test-info-panel" style="display:flex; flex-direction:column; overflow:hidden;">
             <div class="panel-title" id="chartPanelTitle">PT 曲线</div>
             <div class="chart-container" style="flex:1; display:flex; flex-direction:column;">
-                <div class="chart-header" id="chartSubtitle" style="font-size:0.82rem; color:#7f8c8d;">
-                    请在左侧选择工单
-                </div>
+                <div class="chart-header" id="chartSubtitle" style="font-size:0.82rem; color:#7f8c8d; display:none;"></div>
                 <div id="woChartDiv" style="flex:1; min-height:0;"></div>
             </div>
         </div>
