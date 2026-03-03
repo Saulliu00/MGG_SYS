@@ -215,6 +215,19 @@
             <!-- Actual Data Storage Tab -->
             <div id="actual" class="tab-content">
                 <div class="upload-section">
+                    <!-- Work Order Input -->
+                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #2c3e50; font-size: 0.9rem;">
+                            <i class="fas fa-file-alt" style="color: #667eea;"></i> 关联工单号 (选填):
+                        </label>
+                        <input type="text" id="uploadWorkOrderInput" class="form-control" 
+                               placeholder="输入工单号以关联数据（留空则使用当前仿真结果）"
+                               style="font-size: 0.88rem;">
+                        <div style="font-size: 0.78rem; color: #7f8c8d; margin-top: 0.3rem;">
+                            💡 如果上传的是历史工单的实验数据，请填写工单号；如果是当前仿真的实验数据，留空即可
+                        </div>
+                    </div>
+                    
                     <input type="file" id="testFileInput" accept=".xlsx,.xls" style="display: none;">
                     <label class="upload-label" id="uploadLabel" onclick="triggerFileInput()">
                         <i class="fas fa-cloud-upload-alt fa-3x"></i>

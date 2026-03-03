@@ -234,8 +234,15 @@ async function confirmUpload() {
 
     const formData = new FormData();
     formData.append('file', pendingFile);
+    // Add simulation_id if available (from current session)
     if (simulationId) {
         formData.append('simulation_id', simulationId);
+    }
+    
+    // Add work_order if user specified it (for historical data)
+    const workOrderInput = document.getElementById('uploadWorkOrderInput');
+    if (workOrderInput && workOrderInput.value.trim()) {
+        formData.append('work_order', workOrderInput.value.trim());
     }
 
     try {

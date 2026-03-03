@@ -96,8 +96,9 @@ def upload_test_result():
 
         file = request.files['file']
         simulation_id = request.form.get('simulation_id')
+        work_order = request.form.get('work_order')
         result = current_app.file_service.process_test_result_upload(
-            file, current_user.id, simulation_id=simulation_id
+            file, current_user.id, simulation_id=simulation_id, work_order=work_order
         )
 
         # Log successful upload

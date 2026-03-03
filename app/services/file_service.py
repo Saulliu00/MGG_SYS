@@ -31,7 +31,7 @@ class FileService:
         self.db = db
         self.file_handler = FileHandler()
 
-    def process_test_result_upload(self, file: FileStorage, user_id: int, simulation_id=None) -> Dict:
+    def process_test_result_upload(self, file: FileStorage, user_id: int, simulation_id=None, work_order=None) -> Dict:
         """
         Process uploaded test result file and save to database.
 
@@ -39,6 +39,7 @@ class FileService:
             file: Uploaded file from request.files
             user_id: ID of the user uploading the file
             simulation_id: Optional simulation ID to link this result to
+            work_order: Optional work order number to auto-link to latest simulation
 
         Returns:
             Dict: Success response with test_result_id and data
@@ -72,6 +73,17 @@ class FileService:
                     linked_sim_id = int(simulation_id)
                 except (ValueError, TypeError):
                     pass
+            elif work_order:
+                # Auto-link to the most recent simulation with this work order
+                from app.models import Simulation
+                sim = (
+                    Simulation.query
+                    .filter_by(work_order=str(work_order).strip())
+                    .order_by(Simulation.created_at.desc())
+                    .first()
+                )
+                if sim:
+                    linked_sim_id = sim.id
 
             # Create test result record
             test_result = TestResult(
