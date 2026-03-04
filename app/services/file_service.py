@@ -5,7 +5,7 @@ from typing import Dict
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
-from app.models import TestResult
+from app.models import TestResult, Simulation
 from app.utils.file_handler import FileHandler
 from app.utils.subprocess_runner import SubprocessRunner
 from app.utils.paths import (
@@ -67,25 +67,24 @@ class FileService:
             data_dict = self.file_handler.load_excel_data_as_dict(filepath)
 
             # Resolve simulation_id
-            # work_order takes priority when explicitly provided (UI intent: "leave blank
-            # to use current simulation result"), falling back to simulation_id if no
-            # matching simulation is found for that work order.
             linked_sim_id = None
             if work_order:
-                from app.models import Simulation
+                wo = str(work_order).strip()
                 sim = (
                     Simulation.query
-                    .filter_by(work_order=str(work_order).strip())
+                    .filter_by(work_order=wo)
                     .order_by(Simulation.created_at.desc())
                     .first()
                 )
                 if sim:
                     linked_sim_id = sim.id
-                elif simulation_id:
-                    try:
-                        linked_sim_id = int(simulation_id)
-                    except (ValueError, TypeError):
-                        pass
+                else:
+                    # No simulation exists for this work order — create a stub so
+                    # the work order appears in 工单查询.
+                    stub = Simulation(user_id=user_id, work_order=wo)
+                    self.db.session.add(stub)
+                    self.db.session.flush()  # get stub.id without committing yet
+                    linked_sim_id = stub.id
             elif simulation_id:
                 try:
                     linked_sim_id = int(simulation_id)

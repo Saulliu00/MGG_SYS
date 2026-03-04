@@ -1,8 +1,11 @@
+import json
 import os
 
 from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
+from app import db
+from app.models import Simulation, TestResult
 from app.utils.errors import (
     FileValidationError,
     SimulationError,
@@ -163,12 +166,7 @@ def history():
 def experiment():
     """Submit experiment data with batch file upload"""
     try:
-        employee_id = request.form.get('employee_id', '')
-        test_name = request.form.get('test_name', '')
-        equipment = request.form.get('equipment', '')
-        test_date = request.form.get('test_date', '')
-        test_time = request.form.get('test_time', '')
-        ticket_number = request.form.get('ticket_number', '')
+        ticket_number = request.form.get('ticket_number', '').strip()
 
         files = request.files.getlist('files')
         if not files or all(f.filename == '' for f in files):
@@ -177,17 +175,51 @@ def experiment():
         upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'experiments')
         os.makedirs(upload_folder, exist_ok=True)
 
+        # Resolve linked simulation via ticket_number (work order).
+        # If no simulation exists for this work order, create a stub so the
+        # work order appears in 工单查询.
+        linked_sim_id = None
+        if ticket_number:
+            sim = (
+                Simulation.query
+                .filter_by(work_order=ticket_number)
+                .order_by(Simulation.created_at.desc())
+                .first()
+            )
+            if sim:
+                linked_sim_id = sim.id
+            else:
+                stub = Simulation(user_id=current_user.id, work_order=ticket_number)
+                db.session.add(stub)
+                db.session.flush()
+                linked_sim_id = stub.id
+
         saved_files = []
         for file in files:
             if file.filename == '':
                 continue
             filename = secure_filename(file.filename)
-            # Prefix with ticket number if available
             if ticket_number:
                 filename = f"{ticket_number}_{filename}"
             filepath = os.path.join(upload_folder, filename)
             file.save(filepath)
             saved_files.append(filename)
+
+            # Create TestResult DB record so 工单查询 can find this upload
+            try:
+                data_dict = current_app.file_service.file_handler.load_excel_data_as_dict(filepath)
+                test_result = TestResult(
+                    user_id=current_user.id,
+                    simulation_id=linked_sim_id,
+                    filename=filename,
+                    file_path=filepath,
+                    data=json.dumps(data_dict)
+                )
+                db.session.add(test_result)
+            except Exception as parse_err:
+                current_app.logger.warning('Could not parse experiment file %s: %s', filename, parse_err)
+
+        db.session.commit()
 
         return jsonify({
             'success': True,

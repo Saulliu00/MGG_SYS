@@ -38,7 +38,8 @@ class Plotter:
         layout = go.Layout(
             **DEFAULT_LAYOUT,
             xaxis=AXIS_CONFIG['xaxis'],
-            yaxis=AXIS_CONFIG['yaxis']
+            yaxis=AXIS_CONFIG['yaxis'],
+            legend=LEGEND_CONFIG
         )
 
         # Create figure
