@@ -64,8 +64,10 @@ AXIS_CONFIG = {
 
 # Legend configuration
 LEGEND_CONFIG = {
-    'x': 0.7,
-    'y': 0.1,
+    'x': 0.99,
+    'y': 0.01,
+    'xanchor': 'right',
+    'yanchor': 'bottom',
     'bgcolor': 'rgba(255, 255, 255, 0.8)',
     'bordercolor': COLORS['grid'],
     'borderwidth': 1
