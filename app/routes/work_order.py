@@ -45,12 +45,27 @@ def work_order_detail(work_order):
 @login_required
 @research_required
 def delete_test_result(result_id):
-    """Delete a test result — only if the requester uploaded it."""
+    """Delete a test result — admin can delete any; others only their own."""
     try:
         result = current_app.work_order_service.delete_test_result(
-            result_id, current_user.id
+            result_id, current_user.id, is_admin=(current_user.role == 'admin')
         )
         return jsonify(result)
     except Exception as e:
         current_app.logger.error('Error deleting test result %s: %s', result_id, e, exc_info=True)
+        return jsonify({'success': False, 'message': '服务器内部错误'}), 500
+
+
+@wp.route('/<work_order>', methods=['DELETE'])
+@login_required
+@research_required
+def delete_work_order(work_order):
+    """Delete a work order and all its linked data — admin or creator only."""
+    try:
+        result = current_app.work_order_service.delete_work_order(
+            work_order, current_user.id, is_admin=(current_user.role == 'admin')
+        )
+        return jsonify(result)
+    except Exception as e:
+        current_app.logger.error('Error deleting work order %s: %s', work_order, e, exc_info=True)
         return jsonify({'success': False, 'message': '服务器内部错误'}), 500

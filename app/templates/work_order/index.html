@@ -5,7 +5,8 @@
 {% block content %}
 {# Pass current user id to JS safely #}
 <script>
-    const CURRENT_USER_ID = {{ current_user.id | tojson }};
+    const CURRENT_USER_ID   = {{ current_user.id   | tojson }};
+    const CURRENT_USER_ROLE = {{ current_user.role | tojson }};
 </script>
 
 <div class="main-container">

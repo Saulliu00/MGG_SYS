@@ -67,36 +67,56 @@ function renderWorkOrderList(list) {
         return;
     }
 
-    // Render HTML with data-work-order instead of onclick
-    container.innerHTML = list.map(wo => `
-        <div class="wo-item ${wo.work_order === selectedWorkOrder ? 'wo-item-active' : ''}"
+    container.innerHTML = list.map(wo => {
+        const isActive = wo.work_order === selectedWorkOrder;
+        const canDelete = CURRENT_USER_ROLE === 'admin' || wo.owner_id === CURRENT_USER_ID;
+        const deleteBtn = canDelete
+            ? `<button class="wo-delete-btn" data-work-order="${_escapeHtml(wo.work_order)}"
+                       title="删除工单"
+                       style="background:none;border:none;color:#aab2bd;cursor:pointer;
+                              padding:0.15rem 0.3rem;border-radius:4px;font-size:0.8rem;
+                              flex-shrink:0;line-height:1;"
+                       onmouseover="this.style.color='#e74c3c'"
+                       onmouseout="this.style.color='#aab2bd'">
+                   <i class="fas fa-trash-alt"></i>
+               </button>`
+            : '';
+        return `
+        <div class="wo-item"
              data-work-order="${_escapeHtml(wo.work_order)}"
-             style="padding:0.65rem 0.75rem; margin-bottom:0.4rem; border-radius:8px;
-                    cursor:pointer; border:1px solid #e8ecf0;
-                    background:${wo.work_order === selectedWorkOrder ? '#eef2ff' : '#fff'};
+             style="padding:0.55rem 0.6rem; margin-bottom:0.4rem; border-radius:8px;
+                    cursor:pointer; border:1px solid ${isActive ? '#667eea' : '#e8ecf0'};
+                    background:${isActive ? '#eef2ff' : '#fff'};
                     transition:background 0.15s;">
-            <div style="font-weight:600; font-size:0.88rem; color:#2c3e50;
-                        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                <i class="fas fa-file-alt" style="color:#667eea; margin-right:0.4rem;"></i>
-                ${_escapeHtml(wo.work_order)}
+            <div style="display:flex; align-items:center; gap:0.25rem;">
+                <i class="fas fa-file-alt" style="color:#667eea; font-size:0.8rem; flex-shrink:0;"></i>
+                <span style="font-weight:600; font-size:0.85rem; color:#2c3e50;
+                             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">
+                    ${_escapeHtml(wo.work_order)}
+                </span>
+                ${deleteBtn}
             </div>
-            <div style="font-size:0.78rem; color:#7f8c8d; margin-top:0.2rem;
+            <div style="font-size:0.76rem; color:#7f8c8d; margin-top:0.2rem;
                         white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                 ${_escapeHtml(wo.recipe_summary || '—')}
             </div>
-            <div style="font-size:0.75rem; color:#aab2bd; margin-top:0.15rem;">
+            <div style="font-size:0.73rem; color:#aab2bd; margin-top:0.1rem;">
                 ${_escapeHtml(wo.created_at)}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 
-    // Add click event listeners after rendering (event delegation)
-    container.querySelectorAll('.wo-item').forEach(item => {
-        item.addEventListener('click', function() {
-            const workOrder = this.dataset.workOrder;
-            selectWorkOrder(workOrder);
-        });
-    });
+    // Single event delegation handler for both item click and delete button
+    container.onclick = function(e) {
+        const deleteBtn = e.target.closest('.wo-delete-btn');
+        if (deleteBtn) {
+            e.stopPropagation();
+            deleteWorkOrder(deleteBtn.dataset.workOrder);
+            return;
+        }
+        const item = e.target.closest('.wo-item');
+        if (item) selectWorkOrder(item.dataset.workOrder);
+    };
 }
 
 // ── Work Order Detail ─────────────────────────────────────────────────────────
@@ -164,6 +184,7 @@ function renderChart(chartJson) {
 
 function renderStats(stats, testResults) {
     const panel = document.getElementById('statsPanel');
+    const S = 'font-size:0.8rem;';  // shorthand
 
     if (!stats || stats.count === 0) {
         panel.innerHTML =
@@ -173,87 +194,81 @@ function renderStats(stats, testResults) {
         return;
     }
 
-    // Build per-run rows
-    const runRows = testResults.map(tr => {
+    // Helper: one labeled row
+    function row(label, value, muted) {
+        const c = muted ? '#7f8c8d' : '#2c3e50';
+        return `<div style="display:flex;justify-content:space-between;align-items:baseline;
+                             padding:0.2rem 0;${S}">
+                    <span style="color:#95a5a6;">${label}</span>
+                    <span style="color:${c};font-weight:${muted ? '400' : '600'};">${value}</span>
+                </div>`;
+    }
+
+    // Per-run cards
+    const runCards = testResults.map((tr, i) => {
         const peak = stats.peaks.find(p => p.filename === tr.filename);
-        const peakP = peak ? peak.peak_pressure.toFixed(3) : '—';
-        const peakT = peak ? peak.peak_time.toFixed(3) : '—';
-        const isOwner = tr.user_id === CURRENT_USER_ID;
-        const deleteBtn = isOwner
+        const peakP = peak ? peak.peak_pressure.toFixed(3) + ' MPa' : '—';
+        const peakT = peak ? peak.peak_time.toFixed(3) + ' ms'  : '—';
+        const canDelete = CURRENT_USER_ROLE === 'admin' || tr.user_id === CURRENT_USER_ID;
+        const deleteBtn = canDelete
             ? `<button onclick="deleteRun(${tr.id}, ${JSON.stringify(selectedWorkOrder)})"
                        title="删除此记录"
-                       style="background:none;border:none;color:#e74c3c;cursor:pointer;
-                              padding:0.1rem 0.3rem;border-radius:4px;font-size:0.85rem;"
-                       onmouseover="this.style.background='#fdecea'"
-                       onmouseout="this.style.background='none'">
+                       style="background:none;border:none;color:#aab2bd;cursor:pointer;
+                              padding:0.1rem 0.25rem;font-size:0.78rem;line-height:1;"
+                       onmouseover="this.style.color='#e74c3c'"
+                       onmouseout="this.style.color='#aab2bd'">
                    <i class="fas fa-times"></i>
                </button>`
             : '';
 
         return `
-            <tr style="font-size:0.83rem;">
-                <td style="padding:0.4rem 0.5rem; max-width:120px;
-                            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
-                    title="${_escapeHtml(tr.filename)}">${_escapeHtml(tr.filename)}</td>
-                <td style="padding:0.4rem 0.5rem; text-align:right;">${peakP}</td>
-                <td style="padding:0.4rem 0.5rem; text-align:right;">${peakT}</td>
-                <td style="padding:0.4rem 0.3rem; text-align:center;">${deleteBtn}</td>
-            </tr>`;
+        <div style="padding:0.5rem 0.6rem; margin-bottom:0.4rem; border-radius:6px;
+                    border:1px solid #e8ecf0; background:#fff;">
+            <div style="display:flex;align-items:center;gap:0.2rem;margin-bottom:0.3rem;">
+                <span style="font-size:0.7rem;background:#667eea;color:#fff;
+                             padding:0.05rem 0.35rem;border-radius:10px;flex-shrink:0;">
+                    R${i + 1}
+                </span>
+                <span style="${S}font-weight:600;color:#2c3e50;flex:1;
+                             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                      title="${_escapeHtml(tr.filename)}">
+                    ${_escapeHtml(tr.filename)}
+                </span>
+                ${deleteBtn}
+            </div>
+            ${row('峰值压力', peakP, false)}
+            ${row('峰值时间', peakT, false)}
+        </div>`;
     }).join('');
 
-    // Aggregate row (only meaningful when > 1 run)
+    // Aggregate section
     const aggSection = stats.count > 1 ? `
-        <tr style="border-top:2px solid #dce1e7; font-size:0.83rem; background:#f8f9fa;">
-            <td style="padding:0.4rem 0.5rem; font-weight:600; color:#2c3e50;">均值</td>
-            <td style="padding:0.4rem 0.5rem; text-align:right; font-weight:600;">${stats.mean_p.toFixed(3)}</td>
-            <td style="padding:0.4rem 0.5rem; text-align:right; font-weight:600;">${stats.mean_t.toFixed(3)}</td>
-            <td></td>
-        </tr>
-        <tr style="font-size:0.83rem; background:#f8f9fa;">
-            <td style="padding:0.4rem 0.5rem; color:#7f8c8d;">标准差</td>
-            <td style="padding:0.4rem 0.5rem; text-align:right; color:#7f8c8d;">${stats.std_p.toFixed(3)}</td>
-            <td style="padding:0.4rem 0.5rem; text-align:right; color:#7f8c8d;">${stats.std_t.toFixed(3)}</td>
-            <td></td>
-        </tr>
-        <tr style="font-size:0.83rem; background:#f8f9fa;">
-            <td style="padding:0.4rem 0.5rem; color:#7f8c8d;">变异系数</td>
-            <td style="padding:0.4rem 0.5rem; text-align:right; color:#7f8c8d;">${stats.cv_p.toFixed(2)}%</td>
-            <td style="padding:0.4rem 0.5rem; text-align:right; color:#7f8c8d;">${stats.cv_t.toFixed(2)}%</td>
-            <td></td>
-        </tr>` : '';
+        <div style="margin-top:0.6rem; padding:0.5rem 0.6rem; border-radius:6px;
+                    background:#f8f9fa; border:1px solid #dce1e7;">
+            <div style="${S}font-weight:700;color:#2c3e50;margin-bottom:0.35rem;">综合统计</div>
+            <div style="color:#bdc3c7;${S}margin-bottom:0.15rem;">均值</div>
+            ${row('峰值压力', stats.mean_p.toFixed(3) + ' MPa', false)}
+            ${row('峰值时间', stats.mean_t.toFixed(3) + ' ms',  false)}
+            <div style="color:#bdc3c7;${S}margin-top:0.3rem;margin-bottom:0.15rem;">标准差</div>
+            ${row('峰值压力', stats.std_p.toFixed(3) + ' MPa', true)}
+            ${row('峰值时间', stats.std_t.toFixed(3) + ' ms',  true)}
+            <div style="color:#bdc3c7;${S}margin-top:0.3rem;margin-bottom:0.15rem;">变异系数</div>
+            ${row('峰值压力', stats.cv_p.toFixed(2) + '%', true)}
+            ${row('峰值时间', stats.cv_t.toFixed(2) + '%', true)}
+        </div>
+        <div style="margin-top:0.5rem;padding:0.4rem 0.5rem;border-radius:6px;
+                    background:${stats.cv_p < 5 ? '#f0f9f4' : stats.cv_p < 10 ? '#fffbeb' : '#fff5f5'};
+                    border:1px solid ${stats.cv_p < 5 ? '#27ae60' : stats.cv_p < 10 ? '#f39c12' : '#e74c3c'};
+                    font-size:0.76rem;color:#2c3e50;">
+            ${stats.cv_p < 5 ? '✓ 重复性良好' : stats.cv_p < 10 ? '⚠ 重复性一般' : '✗ 重复性较差，请检查工况'}
+        </div>` : '';
 
     panel.innerHTML = `
-        <div style="margin-bottom:1rem;">
-            <div style="font-size:0.82rem; color:#7f8c8d; margin-bottom:0.5rem;">
-                实验次数：<strong style="color:#2c3e50;">${stats.count}</strong>
-            </div>
+        <div style="font-size:0.78rem;color:#7f8c8d;margin-bottom:0.5rem;">
+            实验次数：<strong style="color:#2c3e50;">${stats.count}</strong>
         </div>
-
-        <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse;">
-                <thead>
-                    <tr style="background:#f0f3ff; font-size:0.8rem; color:#4a5568;">
-                        <th style="padding:0.45rem 0.5rem; text-align:left; font-weight:600;">文件名</th>
-                        <th style="padding:0.45rem 0.5rem; text-align:right; font-weight:600;">峰值压力<br><span style="font-weight:400;">(MPa)</span></th>
-                        <th style="padding:0.45rem 0.5rem; text-align:right; font-weight:600;">峰值时间<br><span style="font-weight:400;">(ms)</span></th>
-                        <th style="padding:0.45rem 0.3rem; text-align:center; font-weight:600;"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${runRows}
-                    ${aggSection}
-                </tbody>
-            </table>
-        </div>
-
-        ${stats.count > 1 ? `
-        <div style="margin-top:1.25rem; padding:0.75rem; background:#f0f9f4;
-                    border:1px solid #27ae60; border-radius:8px; font-size:0.82rem; color:#2c3e50;">
-            <i class="fas fa-info-circle" style="color:#27ae60; margin-right:0.4rem;"></i>
-            峰值压力变异系数 <strong>${stats.cv_p.toFixed(2)}%</strong>，
-            峰值时间变异系数 <strong>${stats.cv_t.toFixed(2)}%</strong>
-            ${stats.cv_p < 5 ? '— 实验重复性良好 ✓' : stats.cv_p < 10 ? '— 实验重复性一般' : '— 实验重复性较差，请检查工况'}
-        </div>` : ''}
+        ${runCards}
+        ${aggSection}
     `;
 }
 
@@ -276,6 +291,42 @@ async function deleteRun(resultId, workOrder) {
         }
     } catch (e) {
         console.error('deleteRun error:', e);
+        alert('网络错误，请重试');
+    }
+}
+
+async function deleteWorkOrder(workOrder) {
+    if (!confirm(`确定要删除工单「${workOrder}」及其所有实验记录吗？此操作不可撤销。`)) return;
+
+    try {
+        const resp = await fetch(`/work_order/${encodeURIComponent(workOrder)}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        });
+        const data = await resp.json();
+        if (data.success) {
+            // If the deleted work order was selected, clear the panels
+            if (selectedWorkOrder === workOrder) {
+                selectedWorkOrder = null;
+                document.getElementById('chartPanelTitle').textContent = 'PT 曲线';
+                document.getElementById('chartSubtitle').style.display = 'none';
+                Plotly.react('woChartDiv', [], {
+                    plot_bgcolor: 'white', paper_bgcolor: 'white',
+                    margin: { l: 60, r: 30, t: 30, b: 50 },
+                    xaxis: { title: 'Time (ms)', gridcolor: '#e0e0e0', showgrid: true },
+                    yaxis: { title: 'Pressure (MPa)', gridcolor: '#e0e0e0', showgrid: true }
+                });
+                document.getElementById('statsPanel').innerHTML =
+                    '<div style="color:#7f8c8d;text-align:center;padding:3rem;font-size:0.9rem;">' +
+                    '<i class="fas fa-chart-bar" style="font-size:2rem;display:block;margin-bottom:0.75rem;opacity:0.4;"></i>' +
+                    '请在左侧选择一个工单</div>';
+            }
+            await loadWorkOrders();
+        } else {
+            alert('删除失败：' + (data.message || '未知错误'));
+        }
+    } catch (e) {
+        console.error('deleteWorkOrder error:', e);
         alert('网络错误，请重试');
     }
 }

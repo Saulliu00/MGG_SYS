@@ -17,7 +17,8 @@ class WorkOrderService:
 
     def get_all_work_orders(self) -> List[Dict]:
         """
-        Return all simulations that have a non-empty work_order, newest first.
+        Return one entry per unique work_order string, newest first.
+        The earliest simulation for each work_order is treated as the owner.
 
         Returns:
             List of dicts: {work_order, simulation_id, owner_id, recipe_summary, created_at}
@@ -26,19 +27,27 @@ class WorkOrderService:
             Simulation.query
             .filter(Simulation.work_order.isnot(None))
             .filter(Simulation.work_order != '')
-            .order_by(Simulation.created_at.desc())
+            .order_by(Simulation.created_at)  # oldest first so first-seen = owner
             .all()
         )
-        result = []
+        # Deduplicate: one entry per unique work_order; earliest sim is the owner
+        seen: Dict[str, Simulation] = {}
         for s in sims:
-            result.append({
+            if s.work_order not in seen:
+                seen[s.work_order] = s
+
+        # Sort descending by created_at for display
+        unique_sims = sorted(seen.values(), key=lambda x: x.created_at, reverse=True)
+        return [
+            {
                 'work_order': s.work_order,
                 'simulation_id': s.id,
                 'owner_id': s.user_id,
                 'recipe_summary': WorkOrderService._recipe_summary(s),
                 'created_at': s.created_at.strftime('%Y-%m-%d %H:%M') if s.created_at else '',
-            })
-        return result
+            }
+            for s in unique_sims
+        ]
 
     def get_work_order_detail(self, work_order: str) -> Dict:
         """
@@ -105,9 +114,9 @@ class WorkOrderService:
             'statistics': statistics,
         }
 
-    def delete_test_result(self, test_result_id: int, user_id: int) -> Dict:
+    def delete_test_result(self, test_result_id: int, user_id: int, is_admin: bool = False) -> Dict:
         """
-        Delete a TestResult if it belongs to user_id.
+        Delete a TestResult. Admin can delete any; others only their own.
 
         Returns:
             {'success': True} or {'success': False, 'message': str}
@@ -115,7 +124,7 @@ class WorkOrderService:
         tr = self.db.session.get(TestResult, test_result_id)
         if not tr:
             return {'success': False, 'message': '记录不存在'}
-        if tr.user_id != user_id:
+        if not is_admin and tr.user_id != user_id:
             return {'success': False, 'message': '无权限删除他人数据'}
 
         # Remove physical file
@@ -126,6 +135,46 @@ class WorkOrderService:
                 pass  # Non-fatal — still remove the DB record
 
         self.db.session.delete(tr)
+        self.db.session.commit()
+        return {'success': True}
+
+    def delete_work_order(self, work_order: str, user_id: int, is_admin: bool = False) -> Dict:
+        """
+        Delete a work order and all its linked simulations and test results.
+        Admin can delete any; others only work orders they created (earliest sim owner).
+
+        Returns:
+            {'success': True} or {'success': False, 'message': str}
+        """
+        sims = (
+            Simulation.query
+            .filter_by(work_order=work_order)
+            .order_by(Simulation.created_at)
+            .all()
+        )
+        if not sims:
+            return {'success': False, 'message': '工单不存在'}
+
+        # Permission: admin or creator of the earliest simulation
+        if not is_admin and sims[0].user_id != user_id:
+            return {'success': False, 'message': '无权限删除此工单'}
+
+        sim_ids = [s.id for s in sims]
+        test_results = TestResult.query.filter(
+            TestResult.simulation_id.in_(sim_ids)
+        ).all()
+
+        for tr in test_results:
+            if tr.file_path and os.path.isfile(tr.file_path):
+                try:
+                    os.remove(tr.file_path)
+                except OSError:
+                    pass
+            self.db.session.delete(tr)
+
+        for s in sims:
+            self.db.session.delete(s)
+
         self.db.session.commit()
         return {'success': True}
 
