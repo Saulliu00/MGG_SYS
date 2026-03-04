@@ -617,3 +617,10 @@ table tr:hover {
     min-height: 200px;
     overflow: hidden;
 }
+
+#woChartDiv {
+    width: 100%;
+    height: calc(100vh - 230px);
+    min-height: 300px;
+    overflow: hidden;
+}

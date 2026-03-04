@@ -67,14 +67,11 @@ class FileService:
             data_dict = self.file_handler.load_excel_data_as_dict(filepath)
 
             # Resolve simulation_id
+            # work_order takes priority when explicitly provided (UI intent: "leave blank
+            # to use current simulation result"), falling back to simulation_id if no
+            # matching simulation is found for that work order.
             linked_sim_id = None
-            if simulation_id:
-                try:
-                    linked_sim_id = int(simulation_id)
-                except (ValueError, TypeError):
-                    pass
-            elif work_order:
-                # Auto-link to the most recent simulation with this work order
+            if work_order:
                 from app.models import Simulation
                 sim = (
                     Simulation.query
@@ -84,6 +81,16 @@ class FileService:
                 )
                 if sim:
                     linked_sim_id = sim.id
+                elif simulation_id:
+                    try:
+                        linked_sim_id = int(simulation_id)
+                    except (ValueError, TypeError):
+                        pass
+            elif simulation_id:
+                try:
+                    linked_sim_id = int(simulation_id)
+                except (ValueError, TypeError):
+                    pass
 
             # Create test result record
             test_result = TestResult(
