@@ -158,15 +158,22 @@ def create_app():
         from app.models import User
         admin_user = User.query.filter_by(employee_id='admin').first()
         if not admin_user:
-            admin_password = os.environ.get('ADMIN_PASSWORD')
-            if not admin_password:
-                admin_password = secrets.token_urlsafe(12)
+            # Default password is 'admin123', can be overridden with ADMIN_PASSWORD env var
+            admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+            
+            if os.environ.get('ADMIN_PASSWORD'):
+                print(
+                    f'\n[MGG_SYS] Admin account created with custom password from ADMIN_PASSWORD env var.\n'
+                )
+            else:
                 print(
                     f'\n[MGG_SYS] Default admin account created.\n'
                     f'  Employee ID : admin\n'
-                    f'  Password    : {admin_password}\n'
-                    f'  (Set ADMIN_PASSWORD env var to choose your own password)\n'
+                    f'  Password    : admin123\n'
+                    f'  ⚠️  IMPORTANT: Change this password in production!\n'
+                    f'  (Set ADMIN_PASSWORD env var to use a custom password)\n'
                 )
+            
             admin_user = User(
                 username='admin',
                 employee_id='admin',

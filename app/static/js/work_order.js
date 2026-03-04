@@ -67,9 +67,10 @@ function renderWorkOrderList(list) {
         return;
     }
 
+    // Render HTML with data-work-order instead of onclick
     container.innerHTML = list.map(wo => `
         <div class="wo-item ${wo.work_order === selectedWorkOrder ? 'wo-item-active' : ''}"
-             onclick="selectWorkOrder(${JSON.stringify(wo.work_order)})"
+             data-work-order="${_escapeHtml(wo.work_order)}"
              style="padding:0.65rem 0.75rem; margin-bottom:0.4rem; border-radius:8px;
                     cursor:pointer; border:1px solid #e8ecf0;
                     background:${wo.work_order === selectedWorkOrder ? '#eef2ff' : '#fff'};
@@ -88,6 +89,14 @@ function renderWorkOrderList(list) {
             </div>
         </div>
     `).join('');
+
+    // Add click event listeners after rendering (event delegation)
+    container.querySelectorAll('.wo-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const workOrder = this.dataset.workOrder;
+            selectWorkOrder(workOrder);
+        });
+    });
 }
 
 // ── Work Order Detail ─────────────────────────────────────────────────────────
@@ -137,7 +146,18 @@ async function selectWorkOrder(workOrder) {
 // ── Chart ─────────────────────────────────────────────────────────────────────
 
 function renderChart(chartJson) {
-    Plotly.newPlot('woChartDiv', chartJson.data, chartJson.layout, { responsive: true });
+    try {
+        if (!chartJson || !chartJson.data || !chartJson.layout) {
+            throw new Error('Invalid chart data structure');
+        }
+        Plotly.newPlot('woChartDiv', chartJson.data, chartJson.layout, { responsive: true });
+    } catch (e) {
+        console.error('Chart rendering failed:', e);
+        document.getElementById('woChartDiv').innerHTML =
+            '<div style="color:#e74c3c;text-align:center;padding:3rem;font-size:0.9rem;">' +
+            '<i class="fas fa-exclamation-triangle" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>' +
+            '图表加载失败，请刷新重试</div>';
+    }
 }
 
 // ── Statistics ────────────────────────────────────────────────────────────────
