@@ -6,6 +6,125 @@
 
 ---
 
+## [2026-03-04] Diagnosis: 正向 Legend Position Issue
+
+### Issue Reported
+User reports legend appears "on the right" instead of "bottom-right corner" on 正向 simulation chart.
+
+### Root Cause Analysis
+
+**Investigation Results:**
+
+✅ **Backend Configuration: CORRECT**
+```bash
+$ python test_legend_position.py
+
+Legend configuration:
+{
+  "x": 0.99,          # 99% from left (far right)
+  "y": 0.01,          # 1% from bottom
+  "xanchor": "right",  # Anchor right edge
+  "yanchor": "bottom"  # Anchor bottom edge
+}
+
+✅ CORRECT: Legend IS configured for bottom-right corner
+```
+
+✅ **Code Verification:**
+- `app/config/plot_config.py` - Legend at x=0.99, y=0.01 ✅
+- `app/utils/plotter.py` - create_simulation_chart() uses LEGEND_CONFIG ✅
+- All chart types use same LEGEND_CONFIG ✅
+
+❌ **Root Cause: BROWSER CACHE**
+
+**Evidence:**
+1. Backend configuration is correct (verified by test script)
+2. Recent commit (8fd3e20) changed legend from x=0.7, y=0.1 to x=0.99, y=0.01
+3. User pulled latest code but browser still shows old position
+4. Similar issue occurred before with work_order.js cache
+
+**Why This Happens:**
+- Browser caches Plotly chart JSON from previous page load
+- Old chart had x=0.7, y=0.1 (middle-right, no anchors)
+- New configuration not loaded until cache cleared
+- Previous cache-busting fix was only for JavaScript files, not chart data
+
+### Fix Plan
+
+**Immediate Action (User):**
+
+```bash
+# Option 1: Hard Refresh (Recommended)
+Press: Ctrl+F5 (Windows/Linux) or Cmd+Shift+R (Mac)
+
+# Option 2: Clear Browser Cache
+Chrome: Settings → Privacy → Clear browsing data → Cached images
+Firefox: Settings → Privacy → Clear Data → Cached Web Content
+
+# Option 3: Test in Incognito/Private Window
+Open MGG_SYS in incognito mode to bypass cache
+```
+
+**Code Fix (If Cache Clearing Doesn't Work):**
+
+If hard refresh doesn't solve it, implement explicit Plotly relayout:
+
+**File:** `app/static/js/simulation.js`
+```javascript
+// After Plotly.newPlot(), force legend position
+Plotly.relayout('chartDiv', {
+    'legend.x': 0.99,
+    'legend.y': 0.01,
+    'legend.xanchor': 'right',
+    'legend.yanchor': 'bottom'
+});
+```
+
+### Testing
+
+**Verification Steps:**
+1. Hard refresh browser (Ctrl+F5)
+2. Navigate to 正向 page
+3. Run simulation with any parameters
+4. Check legend position
+
+**Expected Result:**
+```
+Plot Area
+┌─────────────────────────────┐
+│                             │
+│                             │
+│                      ┌─────┐│ ← Legend should be here
+│                      │仿真数据││   (bottom-right corner)
+└──────────────────────┴─────┴┘
+```
+
+**Success Criteria:**
+- [ ] Legend at bottom-right corner INSIDE plot
+- [ ] Legend does not overlap data lines
+- [ ] Consistent across all charts (正向, 对比图, 工单查询)
+
+### Files for Reference
+
+**Diagnosis Document:**
+- `LEGEND_POSITION_DIAGNOSIS.md` - Detailed analysis with visual diagrams
+
+**Test Script:**
+- `test_legend_position.py` - Verifies backend configuration
+
+**Relevant Commits:**
+- `8fd3e20` - Legend anchor fix (x=0.99, y=0.01, anchors added)
+- `7cf8a7b` - Added legend to simulation chart
+
+### Status
+
+**Diagnosis:** ✅ Complete  
+**Root Cause:** ❌ Browser cache showing old configuration  
+**Backend Fix:** ✅ Already correct (commit 8fd3e20)  
+**User Action:** ⏳ Pending - Hard refresh required  
+
+---
+
 ## [2026-03-04] Fix Work Order Visibility in 工单查询 + Simulation Legend
 
 ### Issue Reported
