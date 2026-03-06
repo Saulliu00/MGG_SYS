@@ -29,3 +29,6 @@ Flask-Limiter==4.1.1
 # Utilities
 python-dotenv==1.2.2
 psutil==7.2.2
+
+# Testing / Load test
+requests>=2.31.0
