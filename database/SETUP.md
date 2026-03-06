@@ -1,24 +1,41 @@
 # Database Setup Guide
 
-Complete guide for setting up the PostgreSQL database for the MGG Simulation System.
+Complete guide for the MGG Simulation System database — from development (SQLite) to production (PostgreSQL).
 
-## Prerequisites
+---
 
-- PostgreSQL 15+ installed
-- Python 3.9+ installed
-- pip package manager
+## Development Setup (SQLite — Default)
 
-## Installation Steps
+No configuration is required. On the first run, Flask auto-creates the SQLite database:
+
+```bash
+# From project root
+source venv/bin/activate
+export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+python run.py
+```
+
+The database is created at `instance/simulation_system.db` and seeded with a default admin account.
+
+**Default credentials:**
+```
+Employee ID: admin
+Password:    admin123   (or value of ADMIN_PASSWORD env var)
+```
+
+---
+
+## Production Setup (PostgreSQL)
+
+### Prerequisites
+
+- PostgreSQL 15+
+- Python 3.9+
+- `psycopg2` driver (`pip install psycopg2-binary`)
 
 ### 1. Install PostgreSQL
 
-#### macOS
-```bash
-brew install postgresql@15
-brew services start postgresql@15
-```
-
-#### Ubuntu/Debian
+**Ubuntu / Debian**
 ```bash
 sudo apt-get update
 sudo apt-get install postgresql-15 postgresql-contrib
@@ -26,310 +43,201 @@ sudo systemctl start postgresql
 sudo systemctl enable postgresql
 ```
 
-#### Windows
-Download and install from: https://www.postgresql.org/download/windows/
+**macOS**
+```bash
+brew install postgresql@15
+brew services start postgresql@15
+```
+
+**Windows**
+Download from [postgresql.org/download/windows](https://www.postgresql.org/download/windows/)
 
 ### 2. Create Database and User
 
 ```bash
-# Switch to postgres user (Linux only)
-sudo -u postgres psql
-
-# Or connect directly (macOS/Windows)
-psql postgres
+sudo -u postgres psql          # Linux
+# or: psql postgres            # macOS / Windows
 ```
 
-In PostgreSQL shell:
 ```sql
--- Create database
 CREATE DATABASE mgg_simulation;
-
--- Create user
-CREATE USER mgg_user WITH PASSWORD 'mgg_password';
-
--- Grant privileges
+CREATE USER mgg_user WITH PASSWORD 'your_secure_password';
 GRANT ALL PRIVILEGES ON DATABASE mgg_simulation TO mgg_user;
-
--- Exit
 \q
 ```
 
-### 3. Install Python Dependencies
+### 3. Configure Environment Variables
 
 ```bash
-cd database/
-pip install -r requirements.txt
+export SECRET_KEY=<your-secret-key>
+export ADMIN_PASSWORD=<your-admin-password>
+export DATABASE_URL=postgresql://mgg_user:your_secure_password@localhost:5432/mgg_simulation
 ```
 
-### 4. Configure Environment Variables
+Or store them in a `.env` file (loaded by `python-dotenv`):
+```env
+SECRET_KEY=your_secret_key_here
+ADMIN_PASSWORD=your_admin_password
+DATABASE_URL=postgresql://mgg_user:your_secure_password@localhost:5432/mgg_simulation
+```
+
+### 4. Start the Application
 
 ```bash
-# Copy example environment file
-cp .env.example .env
+# Development
+python run.py
 
-# Edit .env with your database credentials
-nano .env  # or use your preferred editor
+# Production (Gunicorn)
+gunicorn -c gunicorn.conf.py "app:create_app()"
 ```
 
-Update these values in `.env`:
+Flask-SQLAlchemy creates all tables automatically on first start (`db.create_all()`).
+
+---
+
+## Connection Pool Settings
+
+Configured in `app/config/network_config.py` (tune for your hardware):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `pool_size` | 25 | Persistent connections kept open |
+| `max_overflow` | 25 | Extra connections allowed on burst |
+| `pool_timeout` | 10s | Time to wait for a free connection |
+| `pool_recycle` | 3600s | Recycle idle connections hourly |
+| `pool_pre_ping` | True | Discard stale connections automatically |
+
+For **100 concurrent users**, the defaults (25+25=50 max connections, 5 workers × 5 threads) are sufficient.
+
+For **PostgreSQL**, also tune `postgresql.conf`:
 ```
-POSTGRES_USER=mgg_user
-POSTGRES_PASSWORD=your_secure_password
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=mgg_simulation
+max_connections = 100
+shared_buffers = 256MB        # ~25% of RAM
+work_mem = 16MB
+effective_cache_size = 1GB    # ~50-75% of RAM
 ```
 
-### 5. Initialize Database
+---
 
-#### Option A: Create Schema Only
+## SSL/TLS (Production)
+
+```env
+DATABASE_URL=postgresql://mgg_user:pass@your-server.com:5432/mgg_simulation?sslmode=require
+```
+
+---
+
+## Backup and Restore
+
+### Via the application (SQLite or PostgreSQL)
+```python
+from database.manager import backup_database
+path = backup_database(app)   # writes to instance/backups/
+```
+
+### Manual PostgreSQL backup
 ```bash
-# Using SQL file
-psql mgg_simulation < schema.sql
+# Backup
+pg_dump -Fc mgg_simulation > backup_$(date +%Y%m%d_%H%M%S).dump
 
-# Or using Python init script
-python init_db.py
+# Restore
+pg_restore -d mgg_simulation backup_20260306_120000.dump
 ```
 
-#### Option B: Create Schema + Seed Initial Data
+### Automated backups (cron)
 ```bash
-python init_db.py
+# Daily backup at 2:00 AM
+0 2 * * * pg_dump -Fc mgg_simulation > /backups/mgg_$(date +\%Y\%m\%d).dump
 ```
 
-This will create:
-- All database tables
-- Igniter types (3 types)
-- NC types (3 types)
-- GP types (2 types)
-- Test devices (3 devices)
-- Retention policies
-- Admin user (username: `admin`, password: `admin123`)
+---
 
-**⚠️ IMPORTANT: Change the admin password immediately after first login!**
+## Database Management
 
-#### Option C: Create Schema + Seed Sample Data
+### Reset (destructive — deletes all data)
 ```bash
-# First initialize with init_db.py
-python init_db.py
-
-# Then add sample data for testing
-python seed_data.py
+# Via Python
+python -c "
+from app import create_app
+from database.manager import reset_database
+app = create_app()
+reset_database(app)
+"
 ```
 
-This adds:
-- Sample users (engineer1, user1)
-- Sample work orders
-- Sample forward simulations with time series data
-- Sample test results with time series data
-- Sample PT comparisons
-- Sample operation logs
-
-### 6. Verify Installation
-
+### View schema (SQLite)
 ```bash
-python db_config.py
+sqlite3 instance/simulation_system.db ".schema"
 ```
 
-Expected output:
-```
-Testing database connection...
-✓ Database connection successful!
-```
-
-### 7. Create Archive Directory
-
-```bash
-# From project root
-mkdir -p parquet_archive
-```
-
-## Database Management Commands
-
-### Reset Database (Drop and Recreate)
-```bash
-python init_db.py --reset
-```
-
-**⚠️ WARNING: This will delete ALL data!**
-
-### Drop All Tables
-```bash
-python init_db.py --drop
-```
-
-### Backup Database
-```bash
-# Create backup
-pg_dump -Fc mgg_simulation > backup_$(date +%Y%m%d).dump
-
-# Restore from backup
-pg_restore -d mgg_simulation backup_20240115.dump
-```
-
-### View Database Size
-```sql
-SELECT
-    pg_size_pretty(pg_database_size('mgg_simulation')) AS database_size;
-```
-
-### View Table Sizes
+### View table sizes (PostgreSQL)
 ```sql
 SELECT
     tablename,
-    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+    pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) AS size
 FROM pg_tables
 WHERE schemaname = 'public'
-ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+ORDER BY pg_total_relation_size(schemaname || '.' || tablename) DESC;
 ```
 
-## Archive Management
+---
 
-### Run Retention Policy (Archive Old Data)
-```bash
-cd database/
-python -c "from archive_manager import ArchiveManager; mgr = ArchiveManager(); mgr.run_retention_policy()"
-```
-
-### List Archives
-```python
-from archive_manager import ArchiveManager
-
-mgr = ArchiveManager()
-archives = mgr.list_archives()
-for archive in archives:
-    print(archive)
-```
-
-### Restore from Archive
-```python
-from archive_manager import ArchiveManager
-
-mgr = ArchiveManager()
-mgr.restore_from_archive('simulation_time_series_20240101_20240331')
-```
-
-## Connection Pooling
-
-The database uses SQLAlchemy connection pooling:
-- **Pool Size**: 10 connections (configurable via `DB_POOL_SIZE`)
-- **Max Overflow**: 20 additional connections (configurable via `DB_MAX_OVERFLOW`)
-- **Pool Timeout**: 30 seconds (configurable via `DB_POOL_TIMEOUT`)
-- **Pool Recycle**: 3600 seconds / 1 hour (configurable via `DB_POOL_RECYCLE`)
-
-## Security Best Practices
+## Security
 
 ### 1. Change Default Passwords
+```bash
+# Application admin — via web interface (Admin Panel) or env var at startup
+export ADMIN_PASSWORD=new_secure_password
+
+# PostgreSQL user
+psql -c "ALTER USER mgg_user WITH PASSWORD 'new_secure_password';"
+```
+
+### 2. Restrict Database Access (PostgreSQL)
 ```sql
-ALTER USER mgg_user WITH PASSWORD 'new_secure_password';
-```
-
-Update admin password after first login via the web interface.
-Note: The system uses three roles: `admin`, `lab_engineer`, `research_engineer`.
-
-### 2. Enable SSL/TLS (Production)
-In `.env`:
-```
-POSTGRES_HOST=your-server.com
-DATABASE_URL=postgresql://user:pass@host:5432/db?sslmode=require
-```
-
-### 3. Restrict Database Access
-```sql
--- Revoke public access
 REVOKE ALL ON DATABASE mgg_simulation FROM PUBLIC;
-
--- Grant only to specific users
 GRANT CONNECT ON DATABASE mgg_simulation TO mgg_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO mgg_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO mgg_user;
 ```
 
-### 4. Enable Row-Level Security (if needed)
-```sql
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+---
 
-CREATE POLICY user_isolation_policy ON users
-    USING (id = current_user_id());
-```
+## Monitoring (PostgreSQL)
 
-## Monitoring
-
-### Check Active Connections
+### Active connections
 ```sql
 SELECT count(*)
 FROM pg_stat_activity
 WHERE datname = 'mgg_simulation';
 ```
 
-### View Slow Queries
+### Slow queries (requires `pg_stat_statements`)
 ```sql
-SELECT
-    query,
-    calls,
-    total_time,
-    mean_time,
-    max_time
+SELECT query, calls, mean_exec_time, max_exec_time
 FROM pg_stat_statements
-ORDER BY mean_time DESC
+ORDER BY mean_exec_time DESC
 LIMIT 10;
 ```
 
-### Check Table Bloat
-```sql
-SELECT
-    schemaname,
-    tablename,
-    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS total_size,
-    n_live_tup AS live_tuples,
-    n_dead_tup AS dead_tuples
-FROM pg_stat_user_tables
-WHERE n_dead_tup > 1000
-ORDER BY n_dead_tup DESC;
-```
+---
 
 ## Troubleshooting
 
-### Connection Refused
-```bash
-# Check if PostgreSQL is running
-sudo systemctl status postgresql  # Linux
-brew services list  # macOS
+| Problem | Solution |
+|---------|----------|
+| `connection refused` | Check `systemctl status postgresql` (Linux) or `brew services list` (macOS) |
+| `authentication failed` | Verify `DATABASE_URL` credentials; check `pg_hba.conf` |
+| `permission denied` | Re-run the `GRANT` statements above |
+| `database is locked` (SQLite) | Enable WAL mode (automatic on init), reduce concurrent connections, or migrate to PostgreSQL |
+| `no such table` | Run `python run.py` once — `db.create_all()` creates tables on startup |
 
-# Start PostgreSQL if not running
-sudo systemctl start postgresql  # Linux
-brew services start postgresql@15  # macOS
-```
-
-### Authentication Failed
-- Check username and password in `.env`
-- Verify user exists: `psql postgres -c "\du"`
-- Check `pg_hba.conf` for authentication method
-
-### Permission Denied
-```sql
--- Grant necessary permissions
-GRANT ALL PRIVILEGES ON DATABASE mgg_simulation TO mgg_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO mgg_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO mgg_user;
-```
-
-### Out of Memory
-Increase PostgreSQL memory settings in `postgresql.conf`:
-```
-shared_buffers = 2GB  # 25% of RAM
-work_mem = 64MB
-maintenance_work_mem = 512MB
-effective_cache_size = 6GB  # 50-75% of RAM
-```
-
-## Next Steps
-
-1. Configure automatic backups with cron/Task Scheduler
-2. Set up monitoring with pg_stat_statements
-3. Configure archive retention policies
-4. Integrate with main Flask application
-5. Set up replication for high availability (production)
+---
 
 ## Additional Resources
 
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
-- [Parquet Format](https://parquet.apache.org/docs/)
+- [Flask-SQLAlchemy Documentation](https://flask-sqlalchemy.palletsprojects.com/)
+- Current schema: `database/README.md`
+- Future normalized schema: `database/DATABASE_SCHEMA_VISUALIZATION.md`

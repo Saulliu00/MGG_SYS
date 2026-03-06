@@ -1,186 +1,170 @@
-## Quickstart Guide - MGG Database
+# Database Quickstart — MGG_SYS
 
 **Get up and running in 5 minutes.**
 
+All examples use the live application models (`app/models.py`). Run snippets inside a Flask application context.
+
 ---
 
-## 🚀 Quick Setup
+## Setup
 
-### 1. Install Dependencies
 ```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Run once to auto-create tables and seed admin
+python run.py
 ```
 
-### 2. Initialize Database
+On first start the database is created at `instance/simulation_system.db` with:
+- All 3 tables (`user`, `simulation`, `test_result`)
+- WAL mode enabled (SQLite)
+- Default admin account (`admin` / `admin123` or `$ADMIN_PASSWORD`)
+
+---
+
+## Common Tasks
+
+### Create a user (via Admin Panel or directly)
+
+**Web interface:** Admin Panel → Add User
+
+**Programmatic:**
 ```python
-from app import create_app
-from database.manager import init_database
+from app import create_app, db
+from app.models import User
+from flask_bcrypt import Bcrypt
 
 app = create_app()
-init_database(app)
-```
+bcrypt = Bcrypt(app)
 
-**That's it!** The database is created with:
-- ✅ All tables
-- ✅ Indexes
-- ✅ Default admin user (`admin/admin123`)
-- ✅ 2 example recipes
-- ✅ WAL mode enabled (SQLite)
-
----
-
-## 📝 Common Tasks
-
-### Create a User
-```python
-from database.models import User
-from database.extensions import db
-
-user = User(
-    username='John Doe',
-    employee_id='E12345',
-    email='john@example.com',
-    role='research_engineer',
-    department='R&D'
-)
-user.set_password('secure_password')
-db.session.add(user)
-db.session.commit()
-```
-
-### Create a Recipe
-```python
-from database.models import Recipe
-
-recipe = Recipe(
-    user_id=user.id,
-    recipe_name='Test Config #1',
-    ignition_model='Type-A',
-    nc_type_1='NC-Standard',
-    nc_usage_1=20.0,
-    gp_type='GP-Alpha',
-    gp_usage=15.0,
-    shell_model='Shell-100mm',
-    current_condition='5A',
-    sensor_range='0-10MPa',
-    body_model='50cc',
-    equipment='Tester-01'
-)
-db.session.add(recipe)
-db.session.commit()
-```
-
-### Run a Simulation
-```python
-from database.models import Simulation, SimulationTimeSeries, WorkOrder
-
-# 1. Create work order
-wo = WorkOrder(
-    work_order_number='WO-001',
-    recipe_id=recipe.id,
-    user_id=user.id,
-    test_name='Baseline Test'
-)
-db.session.add(wo)
-db.session.flush()
-
-# 2. Run simulation (your simulation code here)
-pt_data = [(0.0, 0.0), (10.0, 2.5), (20.0, 5.0), ...]  # Your simulation results
-
-# 3. Save simulation
-sim = Simulation(
-    user_id=user.id,
-    work_order_id=wo.id,
-    test_name='Run #1',
-    peak_pressure=max(p[1] for p in pt_data),
-    num_data_points=len(pt_data),
-    status='completed'
-)
-db.session.add(sim)
-db.session.flush()
-
-# 4. Save time series
-for i, (time, pressure) in enumerate(pt_data):
-    point = SimulationTimeSeries(
-        simulation_id=sim.id,
-        time_point=time,
-        pressure=pressure,
-        sequence_number=i + 1
+with app.app_context():
+    user = User(
+        employee_id='E12345',
+        username='Zhang San',
+        role='research_engineer',   # admin | research_engineer | lab_engineer
+        phone='13800138000',
+        is_active=True,
     )
-    db.session.add(point)
-
-db.session.commit()
-```
-
-### Query Data
-```python
-# Get all simulations for a user
-sims = Simulation.query.filter_by(user_id=user.id).all()
-
-# Get time series for a simulation
-points = SimulationTimeSeries.query.filter_by(simulation_id=sim.id).all()
-
-# Get recent work orders
-recent_wo = WorkOrder.query.order_by(WorkOrder.created_at.desc()).limit(10).all()
-
-# Find simulations by peak pressure
-high_pressure = Simulation.query.filter(Simulation.peak_pressure > 8.0).all()
+    user.password_hash = bcrypt.generate_password_hash('SecurePass1!').decode('utf-8')
+    db.session.add(user)
+    db.session.commit()
+    print(f'Created user id={user.id}')
 ```
 
 ---
 
-## 🔧 Maintenance
+### Query simulations
 
-### Backup Database
 ```python
+from app.models import Simulation
+
+with app.app_context():
+    # All simulations, newest first
+    sims = Simulation.query.order_by(Simulation.created_at.desc()).all()
+
+    # Find by work order
+    sims = Simulation.query.filter_by(work_order='WO-2026-001').all()
+
+    # Find by recipe (dedup check — matches SimulationService logic)
+    sim = Simulation.query.filter_by(
+        ignition_model='135',
+        nc_type_1='B',
+        nc_usage_1=750.0,
+        nc_type_2='无',
+        nc_usage_2=0.0,
+        gp_type='D',
+        gp_usage=100.0,
+        shell_model='22',
+        current=1.2,
+        sensor_model='200',
+        body_model='10-892',
+    ).first()
+```
+
+---
+
+### Query test results
+
+```python
+from app.models import TestResult
+import json
+
+with app.app_context():
+    # All uploads by a user
+    results = TestResult.query.filter_by(user_id=1).all()
+
+    # All results linked to a work order
+    from app.models import Simulation
+    sims = Simulation.query.filter_by(work_order='WO-2026-001').all()
+    sim_ids = [s.id for s in sims]
+    results = TestResult.query.filter(
+        TestResult.simulation_id.in_(sim_ids)
+    ).order_by(TestResult.uploaded_at.desc()).all()
+
+    # Parse PT data from a result
+    for r in results:
+        data = json.loads(r.data)
+        time = data['time']           # list of floats (ms)
+        pressure = data['pressure']   # list of floats (MPa)
+        print(f'{r.filename}: {len(time)} points, peak={max(pressure):.2f} MPa')
+```
+
+---
+
+### Backup database
+
+```python
+from app import create_app
 from database.manager import backup_database
 
-backup_path = backup_database(app)
-print(f'Backup: {backup_path}')
+app = create_app()
+with app.app_context():
+    path = backup_database(app)
+    print(f'Backup saved to: {path}')
+# → instance/backups/simulation_system_20260306_120000.db
 ```
 
-### Reset Database (⚠️ Deletes all data!)
+---
+
+### Reset database (destructive — deletes ALL data)
+
 ```python
+from app import create_app
 from database.manager import reset_database
 
-reset_database(app)  # Fresh start
+app = create_app()
+with app.app_context():
+    reset_database(app)
+    # Tables dropped and recreated; default admin re-seeded
 ```
 
-### Check Schema
+---
+
+### Inspect schema (SQLite)
+
 ```bash
-sqlite3 instance/mgg.db ".schema"
+sqlite3 instance/simulation_system.db ".schema"
+sqlite3 instance/simulation_system.db "SELECT * FROM user;"
+sqlite3 instance/simulation_system.db "SELECT count(*) FROM test_result;"
 ```
 
 ---
 
-## 📚 Learn More
+## Troubleshooting
 
-- Full documentation: `database/README.md`
-- Schema visualization: `database/schema.sql`
-- Model reference: `database/models.py`
-
----
-
-## 🐛 Common Issues
-
-### "No module named 'database'"
-```bash
-# Make sure you're in the project root:
-cd /path/to/MGG_SYS
-python your_script.py
-```
-
-### "Database is locked"
-- Enable WAL mode (automatic on init)
-- Or close other connections to the database
-
-### "No such table: user"
-```python
-# Run initialization:
-from database.manager import init_database
-init_database(app)
-```
+| Error | Fix |
+|-------|-----|
+| `No module named 'app'` | Run from the project root: `cd /path/to/MGG_SYS` |
+| `No such table: user` | Run `python run.py` once to trigger `db.create_all()` |
+| `Database is locked` | WAL mode is auto-enabled; reduce concurrent writers or migrate to PostgreSQL |
+| `OperationalError: unable to open database` | Ensure `instance/` directory exists and is writable |
 
 ---
 
-**Need help?** Check `database/README.md` for detailed examples.
+## Learn More
+
+- Full schema reference: `database/README.md`
+- PostgreSQL migration: `database/SETUP.md`
+- Future normalized schema: `database/DATABASE_SCHEMA_VISUALIZATION.md`
+- Regression tests: `python database/database_regression_test.py`
