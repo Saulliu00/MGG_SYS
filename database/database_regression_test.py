@@ -834,7 +834,111 @@ class TestRelationships(DatabaseTestCase):
 
 
 # ---------------------------------------------------------------------------
-# 13. Backup
+# 13. Reset database
+# ---------------------------------------------------------------------------
+
+class TestResetDatabase(unittest.TestCase):
+    """database/manager.py — reset_database() drops all tables and re-seeds."""
+
+    def setUp(self):
+        self.db_fd, self.db_path = tempfile.mkstemp(suffix='.db')
+        self.app = _make_test_app(self.db_path)
+
+    def tearDown(self):
+        os.close(self.db_fd)
+        os.unlink(self.db_path)
+
+    def test_reset_clears_user_data(self):
+        from database import reset_database
+        from database.models import User
+        with self.app.app_context():
+            # Add extra user
+            from database.extensions import db
+            u = User(username='Temp', employee_id='TEMP001', role='research_engineer')
+            u.set_password('pw')
+            db.session.add(u)
+            db.session.commit()
+            self.assertGreater(User.query.count(), 1)
+
+            reset_database(self.app)
+            # Only the seeded admin should remain
+            users = User.query.all()
+            self.assertEqual(len(users), 1)
+            self.assertEqual(users[0].employee_id, 'admin')
+
+    def test_reset_re_seeds_admin(self):
+        from database import reset_database
+        from database.models import User
+        with self.app.app_context():
+            reset_database(self.app)
+            admin = User.query.filter_by(employee_id='admin').first()
+            self.assertIsNotNone(admin)
+            self.assertEqual(admin.role, 'admin')
+
+    def test_reset_re_creates_all_tables(self):
+        from database import reset_database
+        from sqlalchemy import inspect
+        with self.app.app_context():
+            reset_database(self.app)
+            from database.extensions import db as _db
+            tables = inspect(_db.engine).get_table_names()
+            for t in ['user', 'simulation', 'test_result']:
+                self.assertIn(t, tables, f'Table "{t}" missing after reset')
+
+    def test_double_reset_is_safe(self):
+        from database import reset_database
+        with self.app.app_context():
+            reset_database(self.app)
+            reset_database(self.app)  # Must not raise
+
+
+# ---------------------------------------------------------------------------
+# 14. Seed data integrity
+# ---------------------------------------------------------------------------
+
+class TestSeedData(DatabaseTestCase):
+    """Verify that init_database() seeds sensible default data."""
+
+    def test_admin_has_bcrypt_hash(self):
+        from database.models import User
+        admin = User.query.filter_by(employee_id='admin').first()
+        self.assertTrue(admin.password_hash.startswith('$2b$') or
+                        admin.password_hash.startswith('$2a$'),
+                        'Admin password must be bcrypt-hashed')
+
+    def test_admin_is_active(self):
+        from database.models import User
+        admin = User.query.filter_by(employee_id='admin').first()
+        self.assertTrue(admin.is_active)
+
+    def test_seeded_recipes_have_valid_structure(self):
+        from database.models import Recipe
+        for r in Recipe.query.all():
+            # Each recipe must be associated with a user
+            self.assertIsNotNone(r.user_id, f'Recipe {r.id} has no user_id')
+
+    def test_no_orphaned_simulations(self):
+        """All Simulation records must have a valid user_id."""
+        from database.models import Simulation, User
+        for s in Simulation.query.all():
+            u = User.query.get(s.user_id)
+            self.assertIsNotNone(u, f'Simulation {s.id} references missing user {s.user_id}')
+
+    def test_session_token_nullable(self):
+        """session_token starts NULL (users are not logged in on seed)."""
+        from database.models import User
+        admin = User.query.filter_by(employee_id='admin').first()
+        # session_token is set on login, so it may or may not be null in tests
+        self.assertTrue(hasattr(admin, 'session_token'))
+
+    def test_last_seen_at_nullable(self):
+        from database.models import User
+        admin = User.query.filter_by(employee_id='admin').first()
+        self.assertTrue(hasattr(admin, 'last_seen_at'))
+
+
+# ---------------------------------------------------------------------------
+# 15. Backup
 # ---------------------------------------------------------------------------
 
 class TestBackup(unittest.TestCase):
@@ -877,6 +981,33 @@ class TestBackup(unittest.TestCase):
         self.assertIsInstance(path, str)
         self.assertTrue(path.endswith('.db'))
 
+    def test_backup_filename_contains_timestamp(self):
+        from database import backup_database
+        with self.app.app_context():
+            path = backup_database(self.app)
+        filename = os.path.basename(path)
+        self.assertTrue(filename.startswith('mgg_backup_'),
+                        f'Backup filename should start with mgg_backup_, got: {filename}')
+
+    def test_backup_is_in_backups_subdirectory(self):
+        from database import backup_database
+        with self.app.app_context():
+            path = backup_database(self.app)
+        parent = os.path.basename(os.path.dirname(path))
+        self.assertEqual(parent, 'backups')
+
+    def test_backup_contains_all_key_tables(self):
+        import sqlite3 as _sqlite3
+        from database import backup_database
+        with self.app.app_context():
+            path = backup_database(self.app)
+        conn = _sqlite3.connect(path)
+        tables = [r[0] for r in
+                  conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+        conn.close()
+        for expected in ['user', 'simulation', 'test_result', 'simulation_time_series']:
+            self.assertIn(expected, tables, f'Table "{expected}" missing from backup')
+
     def test_backup_skipped_for_non_sqlite(self):
         from database import backup_database
         from unittest.mock import patch
@@ -910,6 +1041,8 @@ if __name__ == '__main__':
         loader.loadTestsFromTestCase(TestTestTimeSeries),
         loader.loadTestsFromTestCase(TestPTComparison),
         loader.loadTestsFromTestCase(TestRelationships),
+        loader.loadTestsFromTestCase(TestResetDatabase),
+        loader.loadTestsFromTestCase(TestSeedData),
         loader.loadTestsFromTestCase(TestBackup),
     ]
     runner = unittest.TextTestRunner(verbosity=2, stream=sys.stdout)

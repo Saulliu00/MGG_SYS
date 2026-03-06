@@ -1,285 +1,382 @@
 #!/usr/bin/env python3
 """
-Load Test for MGG_SYS - Test with 100 Concurrent Users
+Load Test for MGG_SYS
 
-Tests critical endpoints:
-- Login
-- Work Order List
-- Work Order Detail
-- Simulation
+Simulates concurrent users exercising critical endpoints:
+  - Authentication (login)
+  - Work Order list & detail
+  - Simulation history
+  - Admin system monitor (admin users only)
+
+Usage:
+    python load_test.py [--url URL] [--users N] [--employee-id ID] [--password PW]
+
+Examples:
+    python load_test.py
+    python load_test.py --url http://127.0.0.1:5001 --users 50
+    python load_test.py --employee-id myuser --password mypass
 """
 
-import time
-import requests
-import threading
+import argparse
+import re
 import statistics
+import sys
+import threading
+import time
 from collections import defaultdict
 from datetime import datetime
 
-# Configuration
-BASE_URL = "http://127.0.0.1:5001"
-NUM_USERS = 100
-NUM_REQUESTS_PER_USER = 10
+import requests
 
-# Test data
-WORK_ORDERS = ["WO-2026-001", "WO-2026-002", "WO-2026-003"]
+# ---------------------------------------------------------------------------
+# Defaults (overridden by CLI args)
+# ---------------------------------------------------------------------------
+DEFAULT_URL = "http://127.0.0.1:5001"
+DEFAULT_USERS = 100
+DEFAULT_EMPLOYEE_ID = "admin"
+DEFAULT_PASSWORD = "admin123"
 
-# Results tracking
-results = defaultdict(list)
-errors = []
+# Work orders to probe in the detail endpoint; non-existent ones still exercise
+# the route and return 404 — which is a valid, non-error response for load tests.
+SAMPLE_WORK_ORDERS = ["WO-2026-001", "WO-2026-002", "WO-2026-003"]
+
+# ---------------------------------------------------------------------------
+# Shared state (protected by lock)
+# ---------------------------------------------------------------------------
+results: dict[str, list[float]] = defaultdict(list)
+success_counts: dict[str, int] = defaultdict(int)
+failure_counts: dict[str, int] = defaultdict(int)
+errors: list[str] = []
 lock = threading.Lock()
 
 
+# ---------------------------------------------------------------------------
+# User simulation
+# ---------------------------------------------------------------------------
+
 class LoadTestUser:
-    """Simulates a single user making requests"""
-    
-    def __init__(self, user_id):
+    """Simulates a single authenticated user making a sequence of requests."""
+
+    def __init__(self, user_id: int, base_url: str, employee_id: str, password: str):
         self.user_id = user_id
+        self.base_url = base_url
+        self.employee_id = employee_id
+        self.password = password
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': f'LoadTest-User-{user_id}'
-        })
-    
-    def login(self):
-        """Login as admin"""
+        self.session.headers.update({'User-Agent': f'LoadTest-User-{user_id}'})
+
+    def _record(self, endpoint: str, duration: float, ok: bool, msg: str = ''):
+        with lock:
+            results[endpoint].append(duration)
+            if ok:
+                success_counts[endpoint] += 1
+            else:
+                failure_counts[endpoint] += 1
+                if msg:
+                    errors.append(msg)
+
+    def login(self) -> bool:
         start = time.time()
         try:
-            # Get login page to get CSRF token
-            resp = self.session.get(f"{BASE_URL}/auth/login")
-            
-            # Extract CSRF token from meta tag
+            # Fetch login page to obtain CSRF token
+            resp = self.session.get(f"{self.base_url}/auth/login", timeout=10)
             csrf_token = None
-            if 'csrf-token' in resp.text:
-                # Simple extraction (not perfect but works for testing)
-                import re
-                match = re.search(r'<meta name="csrf-token" content="([^"]+)"', resp.text)
-                if match:
-                    csrf_token = match.group(1)
-            
-            # Login data
+            match = re.search(r'<meta name="csrf-token" content="([^"]+)"', resp.text)
+            if match:
+                csrf_token = match.group(1)
+
             login_data = {
-                'employee_id': 'admin',
-                'password': 'admin123',
-                'remember': False
+                'employee_id': self.employee_id,
+                'password': self.password,
+                'remember': False,
             }
-            
-            # Add CSRF token if found
+            headers = {'X-CSRFToken': csrf_token} if csrf_token else {}
             if csrf_token:
                 login_data['csrf_token'] = csrf_token
-            
-            # Post login
+
             resp = self.session.post(
-                f"{BASE_URL}/auth/login", 
-                data=login_data, 
+                f"{self.base_url}/auth/login",
+                data=login_data,
                 allow_redirects=True,
-                headers={'X-CSRFToken': csrf_token} if csrf_token else {}
+                headers=headers,
+                timeout=10,
             )
             duration = time.time() - start
-            
-            with lock:
-                results['login'].append(duration)
-                # Check if we were redirected to the main page (successful login)
-                if resp.status_code == 200 and '/simulation' in resp.url:
-                    return True
-                else:
-                    errors.append(f"User {self.user_id}: Login failed - {resp.status_code}, URL: {resp.url}")
-                    return False
-        except Exception as e:
-            with lock:
-                errors.append(f"User {self.user_id}: Login exception - {str(e)}")
+            ok = resp.status_code == 200 and '/simulation' in resp.url
+            self._record(
+                'login', duration, ok,
+                f'User {self.user_id}: Login failed — status={resp.status_code} url={resp.url}' if not ok else '',
+            )
+            return ok
+        except Exception as exc:
+            duration = time.time() - start
+            self._record('login', duration, False, f'User {self.user_id}: Login exception — {exc}')
             return False
-    
-    def get_work_order_list(self):
-        """Get work order list"""
+
+    def get_work_order_list(self) -> bool:
         start = time.time()
         try:
-            resp = self.session.get(f"{BASE_URL}/work_order/list")
+            resp = self.session.get(f"{self.base_url}/work_order/list", timeout=10)
             duration = time.time() - start
-            
-            with lock:
-                results['work_order_list'].append(duration)
-                if resp.status_code != 200:
-                    errors.append(f"User {self.user_id}: Work order list failed - {resp.status_code}")
-                    return False
-            return True
-        except Exception as e:
-            with lock:
-                errors.append(f"User {self.user_id}: Work order list exception - {str(e)}")
+            ok = resp.status_code == 200
+            self._record(
+                'work_order_list', duration, ok,
+                f'User {self.user_id}: work_order/list — status={resp.status_code}' if not ok else '',
+            )
+            return ok
+        except Exception as exc:
+            duration = time.time() - start
+            self._record('work_order_list', duration, False, f'User {self.user_id}: work_order/list exception — {exc}')
             return False
-    
-    def get_work_order_detail(self, work_order):
-        """Get work order detail with PT curves"""
+
+    def get_work_order_detail(self, work_order: str) -> bool:
         start = time.time()
         try:
-            resp = self.session.get(f"{BASE_URL}/work_order/{work_order}/detail")
+            resp = self.session.get(f"{self.base_url}/work_order/{work_order}/detail", timeout=15)
             duration = time.time() - start
-            
-            with lock:
-                results['work_order_detail'].append(duration)
-                if resp.status_code != 200:
-                    errors.append(f"User {self.user_id}: Work order detail failed - {resp.status_code}")
-                    return False
-            return True
-        except Exception as e:
-            with lock:
-                errors.append(f"User {self.user_id}: Work order detail exception - {str(e)}")
+            # 200 (found) and 404 (not found) are both valid non-error responses
+            ok = resp.status_code in (200, 404)
+            self._record(
+                'work_order_detail', duration, ok,
+                f'User {self.user_id}: work_order/detail — status={resp.status_code}' if not ok else '',
+            )
+            return ok
+        except Exception as exc:
+            duration = time.time() - start
+            self._record('work_order_detail', duration, False,
+                         f'User {self.user_id}: work_order/detail exception — {exc}')
             return False
-    
-    def run_test_scenario(self):
-        """Run a realistic user scenario"""
-        # Login
+
+    def get_simulation_history(self) -> bool:
+        start = time.time()
+        try:
+            resp = self.session.get(f"{self.base_url}/simulation/history", timeout=10)
+            duration = time.time() - start
+            ok = resp.status_code == 200
+            self._record(
+                'simulation_history', duration, ok,
+                f'User {self.user_id}: simulation/history — status={resp.status_code}' if not ok else '',
+            )
+            return ok
+        except Exception as exc:
+            duration = time.time() - start
+            self._record('simulation_history', duration, False,
+                         f'User {self.user_id}: simulation/history exception — {exc}')
+            return False
+
+    def get_admin_monitor(self) -> bool:
+        """Admin system monitor — only meaningful for admin accounts; others get 403."""
+        start = time.time()
+        try:
+            resp = self.session.get(f"{self.base_url}/admin/monitor", timeout=10)
+            duration = time.time() - start
+            ok = resp.status_code in (200, 403)
+            self._record(
+                'admin_monitor', duration, ok,
+                f'User {self.user_id}: admin/monitor — status={resp.status_code}' if not ok else '',
+            )
+            return ok
+        except Exception as exc:
+            duration = time.time() - start
+            self._record('admin_monitor', duration, False,
+                         f'User {self.user_id}: admin/monitor exception — {exc}')
+            return False
+
+    def run_scenario(self):
+        """Realistic user journey: login → browse work orders → simulation history → admin monitor."""
         if not self.login():
             return
-        
-        # Get work order list (common operation)
+
+        # Browse work order list several times (lightweight, common operation)
         for _ in range(3):
-            if not self.get_work_order_list():
-                break
-            time.sleep(0.1)  # Brief pause between requests
-        
-        # Get work order details (heaviest operation)
-        for work_order in WORK_ORDERS:
-            if not self.get_work_order_detail(work_order):
-                break
-            time.sleep(0.2)  # Simulate user viewing chart
+            self.get_work_order_list()
+            time.sleep(0.1)
+
+        # Drill into individual work order details (heavier chart + stats generation)
+        for wo in SAMPLE_WORK_ORDERS:
+            self.get_work_order_detail(wo)
+            time.sleep(0.2)
+
+        # Check simulation history
+        self.get_simulation_history()
+
+        # Admin system monitor (will 403 for non-admin — that's fine)
+        self.get_admin_monitor()
 
 
-def worker(user_id):
-    """Thread worker function"""
-    user = LoadTestUser(user_id)
-    user.run_test_scenario()
+# ---------------------------------------------------------------------------
+# Thread worker
+# ---------------------------------------------------------------------------
+
+def worker(user_id: int, base_url: str, employee_id: str, password: str):
+    LoadTestUser(user_id, base_url, employee_id, password).run_scenario()
 
 
-def print_results():
-    """Print test results"""
-    print("\n" + "=" * 80)
-    print("LOAD TEST RESULTS")
-    print("=" * 80)
-    print(f"\nTest Configuration:")
-    print(f"  Target URL: {BASE_URL}")
-    print(f"  Concurrent Users: {NUM_USERS}")
-    print(f"  Total Requests: {sum(len(v) for v in results.values())}")
-    print(f"  Errors: {len(errors)}")
-    
-    print("\n" + "-" * 80)
-    print("Performance Metrics (seconds)")
-    print("-" * 80)
-    print(f"{'Endpoint':<25} {'Requests':<10} {'Mean':<10} {'Median':<10} {'95th %':<10} {'Max':<10}")
-    print("-" * 80)
-    
-    for endpoint, times in sorted(results.items()):
+# ---------------------------------------------------------------------------
+# Reporting
+# ---------------------------------------------------------------------------
+
+def _p95(times: list[float]) -> float:
+    """Return 95th-percentile response time; safe for single-element lists."""
+    if len(times) < 2:
+        return times[0] if times else 0.0
+    return statistics.quantiles(times, n=20)[18]
+
+
+def print_results(num_users: int, base_url: str, elapsed: float):
+    total_requests = sum(len(v) for v in results.values())
+    total_errors = sum(failure_counts.values())
+
+    print()
+    print('=' * 80)
+    print('LOAD TEST RESULTS')
+    print('=' * 80)
+    print(f'  Target URL      : {base_url}')
+    print(f'  Concurrent users: {num_users}')
+    print(f'  Wall-clock time : {elapsed:.2f}s')
+    print(f'  Total requests  : {total_requests}')
+    print(f'  Total failures  : {total_errors}')
+
+    print()
+    print('-' * 92)
+    print(f"{'Endpoint':<25} {'Req':>5} {'OK':>5} {'Fail':>5} {'Mean':>8} {'Median':>8} {'95th%':>8} {'Max':>8}")
+    print('-' * 92)
+
+    for endpoint in sorted(results):
+        times = results[endpoint]
         if not times:
             continue
-        
-        mean = statistics.mean(times)
+        mean   = statistics.mean(times)
         median = statistics.median(times)
-        p95 = statistics.quantiles(times, n=20)[18] if len(times) > 1 else times[0]
-        max_time = max(times)
-        
-        print(f"{endpoint:<25} {len(times):<10} {mean:<10.3f} {median:<10.3f} {p95:<10.3f} {max_time:<10.3f}")
-    
-    print("-" * 80)
-    
-    # Calculate throughput
-    total_time = sum(sum(v) for v in results.values())
-    total_requests = sum(len(v) for v in results.values())
-    if total_time > 0:
-        throughput = total_requests / total_time
-        print(f"\nThroughput: {throughput:.2f} requests/second")
-    
-    # Error summary
+        p95    = _p95(times)
+        mx     = max(times)
+        ok     = success_counts[endpoint]
+        fail   = failure_counts[endpoint]
+        print(f'{endpoint:<25} {len(times):>5} {ok:>5} {fail:>5} {mean:>8.3f} {median:>8.3f} {p95:>8.3f} {mx:>8.3f}')
+
+    print('-' * 92)
+
+    if total_requests > 0:
+        throughput = total_requests / elapsed
+        print(f'\n  Throughput: {throughput:.2f} requests/second')
+
+    # Error details
     if errors:
-        print("\n" + "=" * 80)
-        print("ERRORS")
-        print("=" * 80)
-        print(f"Total Errors: {len(errors)}")
-        print("\nFirst 10 errors:")
-        for error in errors[:10]:
-            print(f"  - {error}")
-        if len(errors) > 10:
-            print(f"  ... and {len(errors) - 10} more errors")
-    else:
-        print("\n✅ No errors!")
-    
-    # Pass/Fail criteria
-    print("\n" + "=" * 80)
-    print("PASS/FAIL CRITERIA")
-    print("=" * 80)
-    
-    # Criteria 1: Error rate < 5%
-    error_rate = len(errors) / max(total_requests, 1) * 100
-    print(f"1. Error Rate: {error_rate:.2f}% ", end="")
-    if error_rate < 5:
-        print("✅ PASS (< 5%)")
-    else:
-        print("❌ FAIL (>= 5%)")
-    
-    # Criteria 2: 95th percentile response time
+        print()
+        print('=' * 80)
+        print('ERRORS (first 15)')
+        print('=' * 80)
+        for err in errors[:15]:
+            print(f'  - {err}')
+        if len(errors) > 15:
+            print(f'  ... and {len(errors) - 15} more')
+
+    # Pass/Fail summary
+    print()
+    print('=' * 80)
+    print('PASS / FAIL CRITERIA')
+    print('=' * 80)
+
+    passed = True
+
+    # 1. Overall error rate
+    error_rate = total_errors / max(total_requests, 1) * 100
+    ok1 = error_rate < 5
+    passed = passed and ok1
+    status = 'PASS' if ok1 else 'FAIL'
+    print(f'  1. Error rate        : {error_rate:5.2f}%  — {status} (threshold < 5%)')
+
+    # 2. Work order detail 95th percentile
     if results['work_order_detail']:
-        p95_detail = statistics.quantiles(results['work_order_detail'], n=20)[18]
-        print(f"2. Work Order Detail 95th %ile: {p95_detail:.3f}s ", end="")
-        if p95_detail < 5.0:
-            print("✅ PASS (< 5s)")
-        else:
-            print("❌ FAIL (>= 5s)")
-    
-    # Criteria 3: Mean response time
+        p95_detail = _p95(results['work_order_detail'])
+        ok2 = p95_detail < 5.0
+        passed = passed and ok2
+        status = 'PASS' if ok2 else 'FAIL'
+        print(f'  2. Detail 95th %ile  : {p95_detail:5.3f}s  — {status} (threshold < 5s)')
+
+    # 3. Work order detail mean
     if results['work_order_detail']:
         mean_detail = statistics.mean(results['work_order_detail'])
-        print(f"3. Work Order Detail Mean: {mean_detail:.3f}s ", end="")
-        if mean_detail < 2.0:
-            print("✅ PASS (< 2s)")
-        else:
-            print("⚠️  WARNING (>= 2s)")
-    
-    print("=" * 80)
+        ok3 = mean_detail < 2.0
+        status = 'PASS' if ok3 else 'WARN'
+        print(f'  3. Detail mean       : {mean_detail:5.3f}s  — {status} (threshold < 2s)')
+
+    # 4. Login success rate
+    if results['login']:
+        login_ok = success_counts['login']
+        login_rate = login_ok / len(results['login']) * 100
+        ok4 = login_rate >= 95
+        passed = passed and ok4
+        status = 'PASS' if ok4 else 'FAIL'
+        print(f'  4. Login success     : {login_rate:5.1f}%  — {status} (threshold >= 95%)')
+
+    print()
+    print('  OVERALL:', 'PASS' if passed else 'FAIL')
+    print('=' * 80)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description='MGG_SYS load test — simulates concurrent users against a live server.',
+    )
+    parser.add_argument('--url', default=DEFAULT_URL,
+                        help=f'Base URL of the running Flask app (default: {DEFAULT_URL})')
+    parser.add_argument('--users', type=int, default=DEFAULT_USERS,
+                        help=f'Number of concurrent users (default: {DEFAULT_USERS})')
+    parser.add_argument('--employee-id', default=DEFAULT_EMPLOYEE_ID,
+                        help=f'Login employee ID (default: {DEFAULT_EMPLOYEE_ID})')
+    parser.add_argument('--password', default=DEFAULT_PASSWORD,
+                        help='Login password (default: admin123)')
+    return parser.parse_args()
 
 
 def main():
-    print("=" * 80)
-    print("MGG_SYS LOAD TEST")
-    print("=" * 80)
-    print(f"\nStarting load test with {NUM_USERS} concurrent users...")
-    print(f"Target: {BASE_URL}")
-    print(f"\nMake sure the Flask server is running!")
-    print("  cd /home/saul/.openclaw/workspace/MGG_SYS")
-    print("  source venv/bin/activate")
-    print("  python run.py")
-    
-    # Check if server is accessible
+    args = parse_args()
+    base_url    = args.url.rstrip('/')
+    num_users   = args.users
+    employee_id = args.employee_id
+    password    = args.password
+
+    print('=' * 80)
+    print('MGG_SYS LOAD TEST')
+    print('=' * 80)
+    print(f'  Target  : {base_url}')
+    print(f'  Users   : {num_users}')
+    print(f'  Account : {employee_id}')
+    print()
+    print('Make sure the Flask server is running:')
+    print('  source venv/bin/activate && python run.py')
+
+    # Verify server is up before spawning threads
     try:
-        resp = requests.get(BASE_URL, timeout=5)
-        print(f"\n✅ Server is accessible (status {resp.status_code})")
-    except Exception as e:
-        print(f"\n❌ Server is NOT accessible: {e}")
-        print("Please start the Flask server before running the load test.")
-        return
-    
-    print(f"\nStarting test at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}...")
+        resp = requests.get(base_url, timeout=5)
+        print(f'\nServer accessible (HTTP {resp.status_code})')
+    except Exception as exc:
+        print(f'\nServer NOT accessible: {exc}')
+        print('Please start the Flask server first.')
+        sys.exit(1)
+
+    print(f'\nStarting at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} ...\n')
     start_time = time.time()
-    
-    # Create threads
-    threads = []
-    for i in range(NUM_USERS):
-        thread = threading.Thread(target=worker, args=(i,))
-        threads.append(thread)
-    
-    # Start all threads
-    for thread in threads:
-        thread.start()
-        time.sleep(0.01)  # Stagger start slightly
-    
-    # Wait for all threads to complete
-    for thread in threads:
-        thread.join()
-    
-    elapsed_time = time.time() - start_time
-    
-    print(f"\nTest completed in {elapsed_time:.2f} seconds")
-    
-    # Print results
-    print_results()
+
+    threads = [
+        threading.Thread(target=worker, args=(i, base_url, employee_id, password), daemon=True)
+        for i in range(num_users)
+    ]
+    for t in threads:
+        t.start()
+        time.sleep(0.01)   # small stagger to avoid thundering-herd on login
+    for t in threads:
+        t.join()
+
+    elapsed = time.time() - start_time
+    print(f'Test completed in {elapsed:.2f}s')
+    print_results(num_users, base_url, elapsed)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
