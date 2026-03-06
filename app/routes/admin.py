@@ -57,6 +57,13 @@ def add_user():
     db.session.add(new_user)
     db.session.commit()
 
+    log_manager.log_info(
+        message=f'Admin created user: {employee_id} (role={role})',
+        action='admin_user_add',
+        username=current_user.username,
+        user_id=current_user.id,
+        ip_address=request.remote_addr,
+    )
     return jsonify({'success': True, 'message': '用户添加成功'})
 
 @bp.route('/user/<int:user_id>/toggle', methods=['POST'])
@@ -72,6 +79,13 @@ def toggle_user(user_id):
     db.session.commit()
 
     status = '启用' if user.is_active else '禁用'
+    log_manager.log_info(
+        message=f'Admin {status} user: {user.employee_id}',
+        action='admin_user_toggle',
+        username=current_user.username,
+        user_id=current_user.id,
+        ip_address=request.remote_addr,
+    )
     return jsonify({'success': True, 'message': f'用户已{status}'})
 
 @bp.route('/user/<int:user_id>/delete', methods=['POST'])
@@ -83,9 +97,17 @@ def delete_user(user_id):
     if user.id == current_user.id:
         return jsonify({'success': False, 'message': '不能删除自己的账户'})
 
+    employee_id = user.employee_id
     db.session.delete(user)
     db.session.commit()
 
+    log_manager.log_info(
+        message=f'Admin deleted user: {employee_id}',
+        action='admin_user_delete',
+        username=current_user.username,
+        user_id=current_user.id,
+        ip_address=request.remote_addr,
+    )
     return jsonify({'success': True, 'message': '用户已删除'})
 
 @bp.route('/user/<int:user_id>/reset-password', methods=['POST'])
@@ -98,6 +120,13 @@ def reset_password(user_id):
     user.set_password(new_password)
     db.session.commit()
 
+    log_manager.log_info(
+        message=f'Admin reset password for user: {user.employee_id}',
+        action='admin_password_reset',
+        username=current_user.username,
+        user_id=current_user.id,
+        ip_address=request.remote_addr,
+    )
     return jsonify({'success': True, 'message': '密码已重置'})
 
 # ============================================================

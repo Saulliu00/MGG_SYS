@@ -23,21 +23,33 @@ _model_data = None  # module-level cache; populated on first call to _load_model
 
 
 def _load_model() -> dict:
-    """Load the most-recent .pkl from the models directory and cache it."""
+    """Load the most-recent .pkl from the models directory and cache it.
+
+    SECURITY NOTE: pickle.load() can execute arbitrary code. Model files must
+    come exclusively from the controlled models directory managed by the
+    development team — never from user uploads or external sources.
+    """
     global _model_data
     if _model_data is not None:
         return _model_data
 
     models_path = get_models_path()
+    # Resolve to absolute path so traversal attempts are rejected below
+    models_abs = os.path.realpath(models_path)
+
     try:
-        model_files = sorted(f for f in os.listdir(models_path) if f.endswith('.pkl'))
+        model_files = sorted(f for f in os.listdir(models_abs) if f.endswith('.pkl'))
     except OSError as e:
         raise SimulationError(f'Cannot access models directory: {e}')
 
     if not model_files:
         raise SimulationError('No model file found in the models directory')
 
-    model_path = os.path.join(models_path, model_files[-1])
+    # Resolve the final path and verify it stays inside models_abs (no traversal)
+    model_path = os.path.realpath(os.path.join(models_abs, model_files[-1]))
+    if not model_path.startswith(models_abs + os.sep) and model_path != models_abs:
+        raise SimulationError('Model path outside the expected models directory')
+
     try:
         with open(model_path, 'rb') as f:
             _model_data = pickle.load(f)

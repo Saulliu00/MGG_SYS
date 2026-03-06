@@ -265,12 +265,3 @@ class FileService:
         except json.JSONDecodeError:
             return {}
 
-    def cleanup_old_temp_files(self, max_age_minutes=60):
-        """
-        Clean up old temporary files.
-
-        Args:
-            max_age_minutes: Maximum age of files to keep (default: 60)
-        """
-        temp_dir = get_temp_directory()
-        self.file_handler.cleanup_temp_files(temp_dir, max_age_minutes)

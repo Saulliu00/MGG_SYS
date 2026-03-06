@@ -103,8 +103,13 @@ def get_db_stats(db_path: str) -> dict:
         conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
         try:
             for table in _DB_TABLES:
+                # Validate against hardcoded whitelist before interpolating into SQL
+                if table not in _DB_TABLES:
+                    continue
                 try:
-                    row = conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()
+                    row = conn.execute(
+                        'SELECT COUNT(*) FROM "{}"'.format(table)
+                    ).fetchone()
                     table_counts[table] = row[0] if row else 0
                 except sqlite3.OperationalError:
                     pass  # Table may not exist yet on a fresh DB

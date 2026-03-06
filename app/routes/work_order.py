@@ -1,7 +1,16 @@
 """Routes for 工单查询 (Work Order Query) — research_engineer access only."""
+import re
+
 from flask import Blueprint, render_template, jsonify, current_app
 from flask_login import login_required, current_user
 from app.utils.decorators import research_required
+
+_WO_RE = re.compile(r'^[\w\-]{1,100}$')
+
+
+def _valid_work_order(wo: str) -> bool:
+    """Return True if the work_order string is safe for use in queries."""
+    return bool(wo and _WO_RE.match(wo))
 
 wp = Blueprint('wp', __name__, url_prefix='/work_order')
 
@@ -31,6 +40,8 @@ def list_work_orders():
 @research_required
 def work_order_detail(work_order):
     """Return combined payload: test results, chart, statistics."""
+    if not _valid_work_order(work_order):
+        return jsonify({'success': False, 'message': '无效的工单号'}), 400
     try:
         detail = current_app.work_order_service.get_work_order_detail(work_order)
         if not detail.get('found'):
@@ -61,6 +72,8 @@ def delete_test_result(result_id):
 @research_required
 def delete_work_order(work_order):
     """Delete a work order and all its linked data — admin or creator only."""
+    if not _valid_work_order(work_order):
+        return jsonify({'success': False, 'message': '无效的工单号'}), 400
     try:
         result = current_app.work_order_service.delete_work_order(
             work_order, current_user.id, is_admin=(current_user.role == 'admin')

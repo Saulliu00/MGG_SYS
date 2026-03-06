@@ -165,6 +165,9 @@ class WorkOrderService:
         ).all()
 
         for tr in test_results:
+            # Admin deletes all test results; owner only deletes their own uploads
+            if not is_admin and tr.user_id != user_id:
+                continue
             if tr.file_path and os.path.isfile(tr.file_path):
                 try:
                     os.remove(tr.file_path)

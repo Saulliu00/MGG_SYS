@@ -153,7 +153,11 @@ def create_app():
                         conn.commit()
                     conn.close()
                 except Exception as mig_err:
-                    app.logger.warning(f'Migration warning: {mig_err}')
+                    app.logger.error(
+                        'Database migration failed — columns last_seen_at / session_token '
+                        'may be missing, which will cause runtime errors: %s',
+                        mig_err, exc_info=True
+                    )
         # Create default admin user if not exists
         from app.models import User
         admin_user = User.query.filter_by(employee_id='admin').first()

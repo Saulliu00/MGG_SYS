@@ -245,20 +245,20 @@ def predict():
     except SubprocessTimeoutError as e:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'message': str(e)
         }), 500
 
     except (SimulationError, SubprocessError) as e:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'message': str(e)
         }), 500
 
     except Exception as e:
         current_app.logger.error('Unexpected prediction error: %s', e, exc_info=True)
         return jsonify({
             'success': False,
-            'error': '服务器内部错误，请稍后重试'
+            'message': '服务器内部错误，请稍后重试'
         }), 500
 
 @bp.route('/save_to_data_folder', methods=['POST'])
@@ -269,7 +269,7 @@ def save_to_data_folder():
         if 'file' not in request.files:
             return jsonify({
                 'success': False,
-                'error': '没有上传文件'
+                'message': '没有上传文件'
             }), 400
 
         file = request.files['file']
@@ -282,14 +282,14 @@ def save_to_data_folder():
     except FileValidationError as e:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'message': str(e)
         }), 400
 
     except Exception as e:
         current_app.logger.error('Save to data folder error: %s', e, exc_info=True)
         return jsonify({
             'success': False,
-            'error': '服务器内部错误，请稍后重试'
+            'message': '服务器内部错误，请稍后重试'
         }), 500
 
 
@@ -301,7 +301,7 @@ def load_test_data():
         if 'file' not in request.files:
             return jsonify({
                 'success': False,
-                'error': '没有上传文件'
+                'message': '没有上传文件'
             }), 400
 
         file = request.files['file']
@@ -311,26 +311,26 @@ def load_test_data():
     except FileValidationError as e:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'message': str(e)
         }), 400
 
     except SubprocessTimeoutError as e:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'message': str(e)
         }), 500
 
     except SubprocessError as e:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'message': str(e)
         }), 500
 
     except Exception as e:
         current_app.logger.error('Load test data error: %s', e, exc_info=True)
         return jsonify({
             'success': False,
-            'error': '服务器内部错误，请稍后重试'
+            'message': '服务器内部错误，请稍后重试'
         }), 500
 
 
@@ -364,7 +364,7 @@ def fetch_recipe_test_data():
 
     except Exception as e:
         current_app.logger.error('Error fetching recipe test data: %s', e, exc_info=True)
-        return jsonify({'found': False, 'error': '服务器内部错误，请稍后重试'}), 500
+        return jsonify({'found': False, 'message': '服务器内部错误，请稍后重试'}), 500
 
 
 @bp.route('/generate_comparison_chart', methods=['POST'])
@@ -390,12 +390,12 @@ def generate_comparison_chart():
     except DataProcessingError as e:
         return jsonify({
             'success': False,
-            'error': str(e)
+            'message': str(e)
         }), 400
 
     except Exception as e:
         current_app.logger.error('Comparison chart generation error: %s', e, exc_info=True)
         return jsonify({
             'success': False,
-            'error': '服务器内部错误，请稍后重试'
+            'message': '服务器内部错误，请稍后重试'
         }), 500
