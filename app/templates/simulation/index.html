@@ -263,6 +263,27 @@
 
             <!-- PT Curve Comparison Tab -->
             <div id="comparison" class="tab-content">
+                <!-- Work Order Search Box -->
+                <div style="margin-bottom: 1rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #2c3e50; font-size: 0.9rem;">
+                        <i class="fas fa-search" style="color: #667eea;"></i> 搜索工单号 (选填):
+                    </label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="comparisonWorkOrderInput" class="form-control" 
+                               placeholder="输入工单号搜索实验数据，留空则仅按配方参数搜索"
+                               style="font-size: 0.88rem; flex: 1;">
+                        <button type="button" onclick="loadRecipeTestData()" 
+                                style="background:#667eea; color:white; border:none; padding:0.55rem 1.2rem;
+                                       border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:bold;
+                                       white-space: nowrap;">
+                            <i class="fas fa-sync-alt"></i> 刷新数据
+                        </button>
+                    </div>
+                    <div style="font-size: 0.78rem; color: #7f8c8d; margin-top: 0.3rem;">
+                        💡 系统将查找匹配当前配方参数的实验数据。若指定工单号，还会包含该工单的所有实验数据。
+                    </div>
+                </div>
+                
                 <div class="chart-container">
                     <div class="chart-header">PT曲线对比</div>
                     <div class="chart-info">

@@ -205,6 +205,10 @@ class SimulationService:
         Find all test results whose parent simulation matches the given recipe
         parameters (cross-user), then return an averaged time-series.
 
+        Search strategy (two-phase):
+        1. Match by recipe parameters (NC/GP types, usage, shell, etc.)
+        2. ALSO match by work_order if provided (for stub simulations from experiment uploads)
+
         user_id is retained in the signature for future audit use but is not
         applied as a DB filter — recipes are a lab-wide concept.
 
@@ -212,11 +216,20 @@ class SimulationService:
             {'found': True,  'data': {'time': [...], 'pressure': [...]}, 'count': N}
             {'found': False} if no matching test data exists.
         """
+        # Phase 1: Match by recipe parameters
         matching_sims = self._build_recipe_query(params).all()
-        if not matching_sims:
+        sim_ids = [s.id for s in matching_sims]
+        
+        # Phase 2: ALSO match by work_order if provided (for stub simulations)
+        work_order = params.get('work_order')
+        if work_order:
+            work_order_sims = Simulation.query.filter_by(work_order=work_order).all()
+            # Add unique simulation IDs (avoid duplicates from phase 1)
+            sim_ids.extend([s.id for s in work_order_sims if s.id not in sim_ids])
+        
+        if not sim_ids:
             return {'found': False}
 
-        sim_ids = [s.id for s in matching_sims]
         test_results = TestResult.query.filter(
             TestResult.simulation_id.in_(sim_ids)
         ).all()

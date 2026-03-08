@@ -291,6 +291,12 @@ async function loadRecipeTestData() {
     for (const [key, value] of formData.entries()) {
         params[key] = value;
     }
+    
+    // ALSO include work order from the comparison tab's search box
+    const comparisonWorkOrderInput = document.getElementById('comparisonWorkOrderInput');
+    if (comparisonWorkOrderInput && comparisonWorkOrderInput.value.trim()) {
+        params['work_order'] = comparisonWorkOrderInput.value.trim();
+    }
 
     try {
         const response = await fetch('/simulation/fetch_recipe_test_data', {
