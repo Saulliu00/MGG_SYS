@@ -31,7 +31,7 @@ class FileService:
         self.db = db
         self.file_handler = FileHandler()
 
-    def process_test_result_upload(self, file: FileStorage, user_id: int, simulation_id=None, work_order=None) -> Dict:
+    def process_test_result_upload(self, file: FileStorage, user_id: int, simulation_id=None, work_order=None, recipe_params=None) -> Dict:
         """
         Process uploaded test result file and save to database.
 
@@ -40,6 +40,7 @@ class FileService:
             user_id: ID of the user uploading the file
             simulation_id: Optional simulation ID to link this result to
             work_order: Optional work order number to auto-link to latest simulation
+            recipe_params: Optional dict of recipe parameters from current form state
 
         Returns:
             Dict: Success response with test_result_id and data
@@ -79,9 +80,39 @@ class FileService:
                 if sim:
                     linked_sim_id = sim.id
                 else:
-                    # No simulation exists for this work order — create a stub so
-                    # the work order appears in 工单查询.
+                    # No simulation exists for this work order — create a stub.
+                    # IMPORTANT: Populate stub with recipe params from current form state
+                    # so future recipe-based searches can find this test data!
                     stub = Simulation(user_id=user_id, work_order=wo)
+                    
+                    # Populate recipe parameters if available
+                    if recipe_params:
+                        stub.ignition_model = recipe_params.get('ignition_model')
+                        stub.nc_type_1 = recipe_params.get('nc_type_1')
+                        stub.nc_type_2 = recipe_params.get('nc_type_2')
+                        stub.gp_type = recipe_params.get('gp_type')
+                        stub.shell_model = recipe_params.get('shell_model')
+                        stub.sensor_model = recipe_params.get('sensor_model')
+                        stub.body_model = recipe_params.get('body_model')
+                        
+                        # Convert numeric fields
+                        try:
+                            stub.nc_usage_1 = float(recipe_params['nc_usage_1']) if recipe_params.get('nc_usage_1') else None
+                        except (ValueError, TypeError):
+                            pass
+                        try:
+                            stub.nc_usage_2 = float(recipe_params['nc_usage_2']) if recipe_params.get('nc_usage_2') else None
+                        except (ValueError, TypeError):
+                            pass
+                        try:
+                            stub.gp_usage = float(recipe_params['gp_usage']) if recipe_params.get('gp_usage') else None
+                        except (ValueError, TypeError):
+                            pass
+                        try:
+                            stub.current = float(recipe_params['current']) if recipe_params.get('current') else None
+                        except (ValueError, TypeError):
+                            pass
+                    
                     self.db.session.add(stub)
                     self.db.session.flush()  # get stub.id without committing yet
                     linked_sim_id = stub.id

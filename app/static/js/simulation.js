@@ -234,6 +234,7 @@ async function confirmUpload() {
 
     const formData = new FormData();
     formData.append('file', pendingFile);
+    
     // Add simulation_id if available (from current session)
     if (simulationId) {
         formData.append('simulation_id', simulationId);
@@ -243,6 +244,20 @@ async function confirmUpload() {
     const workOrderInput = document.getElementById('uploadWorkOrderInput');
     if (workOrderInput && workOrderInput.value.trim()) {
         formData.append('work_order', workOrderInput.value.trim());
+    }
+    
+    // IMPORTANT: Also send current recipe parameters from the form
+    // This allows the backend to populate stub simulation with recipe data
+    // so future recipe-based searches can find this test data!
+    const recipeForm = document.getElementById('simulationForm');
+    if (recipeForm) {
+        const recipeData = new FormData(recipeForm);
+        // Copy all recipe parameters to upload form
+        for (const [key, value] of recipeData.entries()) {
+            if (!formData.has(key)) {  // Don't overwrite work_order or simulation_id
+                formData.append(key, value);
+            }
+        }
     }
 
     try {
@@ -289,10 +304,14 @@ async function loadRecipeTestData() {
     const formData = new FormData(form);
     const params = {};
     for (const [key, value] of formData.entries()) {
-        params[key] = value;
+        // SKIP work_order from the form - only use it if explicitly entered in comparison search box
+        // This allows matching test data uploaded with different work orders but same recipe
+        if (key !== 'work_order') {
+            params[key] = value;
+        }
     }
     
-    // ALSO include work order from the comparison tab's search box
+    // ONLY include work order if explicitly entered in comparison tab's search box
     const comparisonWorkOrderInput = document.getElementById('comparisonWorkOrderInput');
     if (comparisonWorkOrderInput && comparisonWorkOrderInput.value.trim()) {
         params['work_order'] = comparisonWorkOrderInput.value.trim();

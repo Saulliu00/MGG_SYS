@@ -100,8 +100,25 @@ def upload_test_result():
         file = request.files['file']
         simulation_id = request.form.get('simulation_id')
         work_order = request.form.get('work_order')
+        
+        # Capture recipe parameters from current form state (if available)
+        recipe_params = {
+            'ignition_model': request.form.get('ignition_model'),
+            'nc_type_1': request.form.get('nc_type_1'),
+            'nc_usage_1': request.form.get('nc_usage_1'),
+            'nc_type_2': request.form.get('nc_type_2'),
+            'nc_usage_2': request.form.get('nc_usage_2'),
+            'gp_type': request.form.get('gp_type'),
+            'gp_usage': request.form.get('gp_usage'),
+            'shell_model': request.form.get('shell_model'),
+            'current': request.form.get('current'),
+            'sensor_model': request.form.get('sensor_model'),
+            'body_model': request.form.get('body_model'),
+        }
+        
         result = current_app.file_service.process_test_result_upload(
-            file, current_user.id, simulation_id=simulation_id, work_order=work_order
+            file, current_user.id, simulation_id=simulation_id, 
+            work_order=work_order, recipe_params=recipe_params
         )
 
         # Log successful upload
