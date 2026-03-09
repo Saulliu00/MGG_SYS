@@ -1,6 +1,6 @@
 # MGG Database — Current Schema
 
-**Version:** 4.0 (Live / Implemented)
+**Version:** 4.1 (Live / Implemented)
 **Engine:** SQLite (default) or PostgreSQL — switched by `DATABASE_URL` env var
 **Tables:** 3 (`user`, `simulation`, `test_result`)
 **Last Updated:** 2026-03-09

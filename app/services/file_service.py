@@ -156,6 +156,8 @@ class FileService:
             return {
                 'success': True,
                 'test_result_id': test_result.id,
+                'filename': filename,
+                'work_order': work_order or '',
                 'data': data_dict
             }
 

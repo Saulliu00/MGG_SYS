@@ -5,6 +5,17 @@ New entries go at the top.
 
 ---
 
+## [2026-03-09] Schema cleanup: drop legacy tables
+
+### Changes
+- **`migrations/drop_legacy_tables.py`** (new): drops three empty, abandoned tables (`recipe`, `work_order`, `experiment_file`) and removes the stale `work_order_id` column from `simulation`. These were from a prior design iteration that was superseded by the current `simulation.work_order` string column + `test_result` table approach.
+- **`app_regression_test.py`**: added `TestDropLegacyTablesMigration` (5 tests); total now 67.
+- **`database/README.md`**: version bumped to 4.1.
+
+Migration run on `instance/simulation_system.db` 2026-03-09. Tables after cleanup: `user`, `simulation`, `test_result`.
+
+---
+
 ## [2026-03-09] PostgreSQL support + automated daily backup
 
 ### Changes

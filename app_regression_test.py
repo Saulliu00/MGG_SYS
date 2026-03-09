@@ -655,6 +655,193 @@ class TestBackupScript(unittest.TestCase):
         self.assertIn('[LOGS]',    result.stdout)
 
 
+class TestDropLegacyTablesMigration(unittest.TestCase):
+    """migrations/drop_legacy_tables.py — verifies the migration runs cleanly
+    on a fresh temp DB (which never has the legacy tables) and on a DB that
+    has the legacy tables populated."""
+
+    def _make_db(self, with_legacy: bool = False) -> str:
+        """Create a minimal temp SQLite DB and return its path."""
+        import tempfile, sqlite3 as _sqlite3
+        fd, path = tempfile.mkstemp(suffix='_migration_test.db')
+        os.close(fd)
+        conn = _sqlite3.connect(path)
+        conn.executescript('''
+            CREATE TABLE IF NOT EXISTS user (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username VARCHAR(80),
+                employee_id VARCHAR(120) UNIQUE NOT NULL,
+                password_hash VARCHAR(128) NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT "research_engineer",
+                is_active BOOLEAN DEFAULT 1,
+                created_at DATETIME
+            );
+            CREATE TABLE IF NOT EXISTS simulation (
+                id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                ignition_model VARCHAR(50),
+                nc_type_1 VARCHAR(50),
+                nc_usage_1 FLOAT,
+                nc_type_2 VARCHAR(50),
+                nc_usage_2 FLOAT,
+                gp_type VARCHAR(50),
+                gp_usage FLOAT,
+                shell_model VARCHAR(50),
+                current FLOAT,
+                sensor_model VARCHAR(50),
+                body_model VARCHAR(50),
+                equipment VARCHAR(50),
+                employee_id VARCHAR(100),
+                test_name VARCHAR(200),
+                notes TEXT,
+                work_order VARCHAR(50),
+                result_data TEXT,
+                chart_image VARCHAR(255),
+                created_at DATETIME,
+                work_order_id INTEGER,
+                PRIMARY KEY (id),
+                FOREIGN KEY (user_id) REFERENCES user(id),
+                CONSTRAINT uq_simulation_recipe UNIQUE (
+                    ignition_model, nc_type_1, nc_usage_1, nc_type_2, nc_usage_2,
+                    gp_type, gp_usage, shell_model, current, sensor_model, body_model
+                )
+            );
+            CREATE TABLE IF NOT EXISTS test_result (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                simulation_id INTEGER,
+                filename VARCHAR(255) NOT NULL,
+                file_path VARCHAR(500) NOT NULL,
+                data TEXT,
+                uploaded_at DATETIME,
+                FOREIGN KEY(user_id) REFERENCES user(id),
+                FOREIGN KEY(simulation_id) REFERENCES simulation(id)
+            );
+        ''')
+        if with_legacy:
+            conn.executescript('''
+                CREATE TABLE IF NOT EXISTS recipe (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS work_order (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    work_order_number VARCHAR(50) NOT NULL UNIQUE,
+                    recipe_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    FOREIGN KEY(recipe_id) REFERENCES recipe(id),
+                    FOREIGN KEY(user_id) REFERENCES user(id)
+                );
+                CREATE TABLE IF NOT EXISTS experiment_file (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    work_order_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    original_filename VARCHAR(255) NOT NULL,
+                    stored_filename VARCHAR(255) NOT NULL,
+                    file_path VARCHAR(500) NOT NULL,
+                    FOREIGN KEY(work_order_id) REFERENCES work_order(id),
+                    FOREIGN KEY(user_id) REFERENCES user(id)
+                );
+            ''')
+        conn.commit()
+        conn.close()
+        return path
+
+    def tearDown(self):
+        # Clean up any temp DBs created during the test
+        for attr in ('_db_path',):
+            path = getattr(self, attr, None)
+            if path and os.path.exists(path):
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+
+    def test_migration_drops_legacy_tables(self):
+        """Legacy tables present and empty → all three dropped, simulation rebuilt."""
+        import sqlite3 as _sqlite3
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=True)
+        result = migrate(self._db_path)
+        self.assertTrue(result, 'Migration returned False')
+        conn = _sqlite3.connect(self._db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        )
+        tables = [r[0] for r in cursor.fetchall()]
+        conn.close()
+        self.assertNotIn('recipe',          tables, 'recipe table still exists')
+        self.assertNotIn('work_order',      tables, 'work_order table still exists')
+        self.assertNotIn('experiment_file', tables, 'experiment_file table still exists')
+        self.assertIn('simulation',  tables)
+        self.assertIn('test_result', tables)
+        self.assertIn('user',        tables)
+
+    def test_migration_removes_work_order_id_column(self):
+        """work_order_id column must be absent after migration."""
+        import sqlite3 as _sqlite3
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=True)
+        migrate(self._db_path)
+        conn = _sqlite3.connect(self._db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='simulation'")
+        schema = cursor.fetchone()[0]
+        conn.close()
+        self.assertNotIn('work_order_id', schema,
+                         'work_order_id column still present in simulation schema')
+
+    def test_migration_preserves_simulation_data(self):
+        """Existing simulation rows must survive the rebuild."""
+        import sqlite3 as _sqlite3
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=True)
+        # Insert a user and a simulation row
+        conn = _sqlite3.connect(self._db_path)
+        conn.execute(
+            "INSERT INTO user(id, employee_id, password_hash, role) VALUES (1,'u1','h','admin')"
+        )
+        conn.execute(
+            "INSERT INTO simulation(id, user_id, work_order) VALUES (42, 1, 'WO-TEST')"
+        )
+        conn.commit()
+        conn.close()
+        migrate(self._db_path)
+        conn = _sqlite3.connect(self._db_path)
+        row = conn.execute(
+            "SELECT id, work_order FROM simulation WHERE id=42"
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(row, 'Simulation row lost after migration')
+        self.assertEqual(row[0], 42)
+        self.assertEqual(row[1], 'WO-TEST')
+
+    def test_migration_idempotent_on_clean_db(self):
+        """Running on a DB with no legacy tables must succeed without error."""
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=False)
+        result = migrate(self._db_path)
+        self.assertTrue(result, 'Migration failed on already-clean DB')
+
+    def test_migration_aborts_if_table_not_empty(self):
+        """If a legacy table has rows, migration must abort and return False."""
+        import sqlite3 as _sqlite3
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=True)
+        conn = _sqlite3.connect(self._db_path)
+        conn.execute(
+            "INSERT INTO user(id, employee_id, password_hash, role) VALUES (1,'u1','h','admin')"
+        )
+        conn.execute(
+            "INSERT INTO recipe(id, user_id) VALUES (1, 1)"
+        )
+        conn.commit()
+        conn.close()
+        result = migrate(self._db_path)
+        self.assertFalse(result, 'Migration should have aborted with non-empty recipe table')
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -679,6 +866,7 @@ if __name__ == '__main__':
         loader.loadTestsFromTestCase(TestWorkOrderService),
         loader.loadTestsFromTestCase(TestRoutes),
         loader.loadTestsFromTestCase(TestBackupScript),
+        loader.loadTestsFromTestCase(TestDropLegacyTablesMigration),
     ]
 
     runner = unittest.TextTestRunner(verbosity=2, stream=sys.stdout)

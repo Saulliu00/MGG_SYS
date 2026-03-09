@@ -275,8 +275,16 @@ async function confirmUpload() {
             btn.innerHTML = '<i class="fas fa-check"></i> 确认上传';
             document.getElementById('uploadPreviewArea').style.display = 'none';
             const label = document.getElementById('uploadLabel');
+            let woLink = '';
+            if (result.work_order) {
+                woLink = `<p style="font-size:0.85rem;margin-top:4px;">
+                    <a href="/work_order/" target="_blank" style="color:#2980b9;">
+                        <i class="fas fa-external-link-alt"></i> 在工单查询中查看 ${result.work_order}
+                    </a></p>`;
+            }
             label.innerHTML = '<i class="fas fa-check-circle fa-2x" style="color:#27ae60"></i>'
                 + `<p style="color:#27ae60;font-weight:bold;">已存储：${result.filename || ''}</p>`
+                + woLink
                 + '<p style="font-size:0.85rem;color:#7f8c8d;">点击可重新上传</p>';
             plotComparisonChart();
         } else {

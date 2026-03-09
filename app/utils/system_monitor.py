@@ -114,15 +114,30 @@ def get_disk_usage(db_path: str, uploads_path: str, backups_path: str) -> dict:
 def get_db_stats(db_path: str) -> dict:
     """Row counts per table and backup inventory. Uses SQLAlchemy ORM — works for
     both SQLite and PostgreSQL without raw SQL or file-path assumptions."""
-    from app.models import User, Simulation, TestResult
+    from sqlalchemy import inspect as sa_inspect, text
+    from app import db
 
-    table_counts = {'user': 0, 'simulation': 0, 'test_result': 0}
+    # Discover all tables dynamically so the UI always reflects the real schema
+    table_counts = {}
     try:
-        table_counts['user']        = User.query.count()
-        table_counts['simulation']  = Simulation.query.count()
-        table_counts['test_result'] = TestResult.query.count()
+        table_names = sorted(sa_inspect(db.engine).get_table_names())
+        for t in table_names:
+            try:
+                table_counts[t] = db.session.execute(
+                    text(f'SELECT COUNT(*) FROM "{t}"')
+                ).scalar() or 0
+            except Exception:
+                table_counts[t] = '?'
     except Exception:
-        pass
+        # Fallback to the 3 known ORM models
+        from app.models import User, Simulation, TestResult
+        table_counts = {'user': 0, 'simulation': 0, 'test_result': 0}
+        try:
+            table_counts['user']        = User.query.count()
+            table_counts['simulation']  = Simulation.query.count()
+            table_counts['test_result'] = TestResult.query.count()
+        except Exception:
+            pass
 
     # File size: meaningful for SQLite only; PostgreSQL size is in get_disk_usage
     file_size_mb = _mb(os.path.getsize(db_path)) if db_path and os.path.isfile(db_path) else 0
@@ -158,6 +173,7 @@ def get_request_stats() -> dict:
     entries = log_manager.read_log_file(filename=None, max_rows=50000)
 
     total = errors = slow = 0
+    error_entries = []
     for row in entries:
         sc = row.get('status_code', '')
         dm = row.get('duration_ms', '')
@@ -167,6 +183,14 @@ def get_request_stats() -> dict:
         try:
             if int(sc) >= 400:
                 errors += 1
+                error_entries.append({
+                    'time':        row.get('time', ''),
+                    'method':      row.get('method', ''),
+                    'path':        row.get('path', ''),
+                    'status_code': sc,
+                    'username':    row.get('username', ''),
+                    'message':     row.get('message', ''),
+                })
         except ValueError:
             pass
         try:
@@ -181,6 +205,7 @@ def get_request_stats() -> dict:
         'error_count':        errors,
         'slow_request_count': slow,
         'error_rate_percent': error_rate,
+        'recent_errors':      error_entries[-20:][::-1],  # newest first, up to 20
     }
 
 
