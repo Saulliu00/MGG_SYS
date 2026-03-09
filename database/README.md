@@ -1,9 +1,9 @@
 # MGG Database — Current Schema
 
 **Version:** 4.0 (Live / Implemented)
-**Engine:** SQLite (dev) — PostgreSQL-compatible
+**Engine:** SQLite (default) or PostgreSQL — switched by `DATABASE_URL` env var
 **Tables:** 3 (`user`, `simulation`, `test_result`)
-**Last Updated:** 2026-03-06
+**Last Updated:** 2026-03-09
 
 > This document describes the schema **actually running** in the application (`app/models.py`).
 > For the future normalized design (time-series tables, archival, etc.) see `DATABASE_SCHEMA_VISUALIZATION.md`.
@@ -167,11 +167,27 @@ init_database(app)
 ```
 
 ### Backup
+
+**Automated daily backup (recommended):**
+```bash
+# Run manually
+python scripts/backup.py
+
+# Cron — daily at 02:00
+0 2 * * * cd /home/saul_liu/Desktop/MGG_SYS && \
+          /home/saul_liu/Desktop/MGG_SYS/venv/bin/python scripts/backup.py \
+          >> /var/log/mgg_backup.log 2>&1
+```
+
+Backs up: database (SQLite `.db` copy or PostgreSQL `.dump`), `instance/uploads/` (tar.gz), `app/log/` (tar.gz). Keeps 30 days by default (`--retention-days N` to change).
+
+**From application code:**
 ```python
 from database.manager import backup_database
 path = backup_database(app)
 print(f'Backup written to: {path}')
-# Output: instance/backups/simulation_system_YYYYMMDD_HHMMSS.db
+# SQLite:     instance/backups/mgg_backup_YYYYMMDD_HHMMSS.db
+# PostgreSQL: instance/backups/mgg_backup_YYYYMMDD_HHMMSS.dump
 ```
 
 ### Reset (destructive — deletes all data)
@@ -223,8 +239,11 @@ TestResult.query.filter_by(user_id=user_id).all()
 The database-layer test suite covers all models, constraints, relationships, WAL mode, backup logic, `reset_database()`, and seeded data integrity:
 
 ```bash
-# From project root
+# Database-layer tests only
 python database/database_regression_test.py
+
+# Full application regression tests (62 tests, includes backup script tests)
+python app_regression_test.py
 ```
 
-Uses a temporary SQLite file — the production database is never touched.
+All tests use a temporary SQLite file — the production database is never touched.

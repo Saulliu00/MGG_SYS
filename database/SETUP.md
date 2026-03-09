@@ -129,25 +129,40 @@ DATABASE_URL=postgresql://mgg_user:pass@your-server.com:5432/mgg_simulation?sslm
 
 ## Backup and Restore
 
-### Via the application (SQLite or PostgreSQL)
+### Automated daily backup (recommended)
+
+`scripts/backup.py` backs up database + uploaded Excel files + application logs in one shot:
+
+```bash
+# Run once to verify
+python scripts/backup.py
+
+# Schedule via cron — daily at 02:00
+0 2 * * * cd /home/saul_liu/Desktop/MGG_SYS && \
+          /home/saul_liu/Desktop/MGG_SYS/venv/bin/python scripts/backup.py \
+          >> /var/log/mgg_backup.log 2>&1
+```
+
+Output in `instance/backups/`:
+- `mgg_backup_YYYYMMDD_HHMMSS.db` — SQLite copy **or** `mgg_backup_*.dump` — pg_dump archive
+- `uploads_YYYYMMDD_HHMMSS.tar.gz` — all uploaded Excel files
+- `logs_YYYYMMDD_HHMMSS.tar.gz` — application CSV logs
+
+Backups older than 30 days are pruned automatically (override: `--retention-days N`).
+
+### Via application code (SQLite or PostgreSQL)
 ```python
 from database.manager import backup_database
 path = backup_database(app)   # writes to instance/backups/
 ```
 
-### Manual PostgreSQL backup
+### Manual PostgreSQL backup / restore
 ```bash
 # Backup
 pg_dump -Fc mgg_simulation > backup_$(date +%Y%m%d_%H%M%S).dump
 
 # Restore
 pg_restore -d mgg_simulation backup_20260306_120000.dump
-```
-
-### Automated backups (cron)
-```bash
-# Daily backup at 2:00 AM
-0 2 * * * pg_dump -Fc mgg_simulation > /backups/mgg_$(date +\%Y\%m\%d).dump
 ```
 
 ---

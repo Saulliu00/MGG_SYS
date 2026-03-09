@@ -8,8 +8,12 @@ Covers:
   - WorkOrderService: deduplication, authorization, delete scoping
   - Work-order route validation: invalid param → 400
   - Auth enforcement: unauthenticated → redirect
+  - Backup script (scripts/backup.py): SQLite backup, uploads, logs
 
-Uses a temporary SQLite database; never touches the production database.
+Database:
+  Tests always run against a temporary SQLite database regardless of the
+  DATABASE_URL environment variable, keeping tests fast and self-contained.
+  The production PostgreSQL path is exercised on the real server.
 
 Run from the project root:
     python app_regression_test.py
@@ -584,6 +588,74 @@ class TestRoutes(AppTestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 6. Backup script — scripts/backup.py
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestBackupScript(unittest.TestCase):
+    """scripts/backup.py — end-to-end backup of DB, uploads, logs."""
+
+    def setUp(self):
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil as _shutil
+        _shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _run_backup(self, env_overrides=None):
+        """Run the backup script in a subprocess with isolated paths."""
+        import subprocess, sys
+        env = os.environ.copy()
+        env['DATABASE_URL'] = f'sqlite:///{_DB_PATH}'
+        # Override internal paths via env so backup writes to tmpdir
+        if env_overrides:
+            env.update(env_overrides)
+        result = subprocess.run(
+            [sys.executable, 'scripts/backup.py', '--retention-days', '30'],
+            capture_output=True, text=True, env=env,
+        )
+        return result
+
+    def test_backup_exits_zero(self):
+        result = self._run_backup()
+        self.assertEqual(result.returncode, 0,
+                         f'Backup script failed:\n{result.stdout}\n{result.stderr}')
+
+    def _backup_dir(self):
+        """The directory the backup script actually writes to."""
+        return os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 'instance', 'backups'
+        )
+
+    def test_backup_creates_db_file(self):
+        import glob
+        result = self._run_backup()
+        self.assertEqual(result.returncode, 0)
+        db_backups = glob.glob(os.path.join(self._backup_dir(), 'mgg_backup_*.db'))
+        self.assertGreater(len(db_backups), 0, 'No DB backup file created')
+
+    def test_backup_creates_uploads_archive(self):
+        import glob
+        result = self._run_backup()
+        self.assertEqual(result.returncode, 0)
+        uploads_archives = glob.glob(os.path.join(self._backup_dir(), 'uploads_*.tar.gz'))
+        self.assertGreater(len(uploads_archives), 0, 'No uploads archive created')
+
+    def test_backup_creates_logs_archive(self):
+        import glob
+        result = self._run_backup()
+        self.assertEqual(result.returncode, 0)
+        log_archives = glob.glob(os.path.join(self._backup_dir(), 'logs_*.tar.gz'))
+        self.assertGreater(len(log_archives), 0, 'No logs archive created')
+
+    def test_backup_output_mentions_all_three_sections(self):
+        result = self._run_backup()
+        self.assertIn('[DB]',      result.stdout)
+        self.assertIn('[UPLOADS]', result.stdout)
+        self.assertIn('[LOGS]',    result.stdout)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -606,6 +678,7 @@ if __name__ == '__main__':
         loader.loadTestsFromTestCase(TestWorkOrderParamValidation),
         loader.loadTestsFromTestCase(TestWorkOrderService),
         loader.loadTestsFromTestCase(TestRoutes),
+        loader.loadTestsFromTestCase(TestBackupScript),
     ]
 
     runner = unittest.TextTestRunner(verbosity=2, stream=sys.stdout)

@@ -116,7 +116,27 @@ gunicorn \
   "app:create_app()"
 ```
 
-### Option 3: systemd service
+### Option 3: PostgreSQL (production database)
+
+Set `DATABASE_URL` before starting Gunicorn to switch from SQLite to PostgreSQL:
+
+```bash
+export DATABASE_URL=postgresql://mgg_user:your_password@localhost:5432/mgg_simulation
+export SECRET_KEY=<your-secret-key>
+export ADMIN_PASSWORD=<your-admin-password>
+gunicorn -c gunicorn.conf.py "app:create_app()"
+```
+
+Or add to a `.env` file:
+```env
+DATABASE_URL=postgresql://mgg_user:your_password@localhost:5432/mgg_simulation
+SECRET_KEY=your_secret_key
+ADMIN_PASSWORD=your_admin_password
+```
+
+See `database/SETUP.md` for full PostgreSQL installation and configuration instructions.
+
+### Option 4: systemd service
 
 Create `/etc/systemd/system/mgg-system.service`:
 
@@ -248,7 +268,7 @@ Slow requests (> 5 s) are logged automatically. The middleware logs include:
 - [ ] Set `SESSION_COOKIE_SECURE = True` when using HTTPS
 - [ ] Open only port 5001 in firewall (or 443 behind nginx)
 - [ ] Run as a non-root user
-- [ ] Enable database backups (see `database/SETUP.md`)
+- [ ] Enable automated daily backups: `crontab -e` → add `scripts/backup.py` entry (see `database/SETUP.md`)
 - [ ] For PostgreSQL: restrict access per `database/SETUP.md` security section
 
 ---
