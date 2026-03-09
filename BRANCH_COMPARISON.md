@@ -1,6 +1,11 @@
 # MGG_SYS Branch Comparison Guide
 
-**Last Updated:** 2026-02-23
+> **Historical Reference (2026-02-23)**
+> This document describes the three-branch strategy as of early development.
+> The `db-optimized` branch has since evolved: it now uses a simplified 3-table schema
+> (`user`, `simulation`, `test_result`) — the `recipe`, `work_order` (as separate table),
+> and `*_time_series` tables described here were removed to reduce complexity.
+> The `master` and `DB_dev` branches still exist as reference implementations.
 
 ---
 

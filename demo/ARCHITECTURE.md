@@ -151,3 +151,24 @@ User uploads .xlsx file
 ## Summary
 
 The demo folder is a **completely independent mini-application** designed for quick demonstrations without the complexity of the full system. It must remain isolated to ensure stability and ease of use.
+
+---
+
+## Isolation Policy
+
+The `demo/` folder is **completely isolated** from the main project and must remain so.
+
+| | Rule |
+|-|------|
+| ✅ DO | Keep all demo code inside `demo/` |
+| ✅ DO | Use standalone scripts for demo functionality |
+| ✅ DO | Test demo independently |
+| ❌ DON'T | Import from `app/` or any main project module |
+| ❌ DON'T | Share database connections with the main project |
+| ❌ DON'T | Break demo when refactoring the main project |
+
+**Verify isolation:**
+```bash
+grep -r "from app" demo/*.py   # Should return nothing
+grep -r "import app" demo/*.py  # Should return nothing
+```

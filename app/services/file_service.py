@@ -80,42 +80,61 @@ class FileService:
                 if sim:
                     linked_sim_id = sim.id
                 else:
-                    # No simulation exists for this work order — create a stub.
-                    # IMPORTANT: Populate stub with recipe params from current form state
-                    # so future recipe-based searches can find this test data!
-                    stub = Simulation(user_id=user_id, work_order=wo)
-                    
-                    # Populate recipe parameters if available
+                    # No simulation exists for this work order.
+                    # If recipe params are provided, try to find an existing simulation
+                    # with the same recipe to avoid violating the unique constraint.
+                    linked_sim_id = None
                     if recipe_params:
-                        stub.ignition_model = recipe_params.get('ignition_model')
-                        stub.nc_type_1 = recipe_params.get('nc_type_1')
-                        stub.nc_type_2 = recipe_params.get('nc_type_2')
-                        stub.gp_type = recipe_params.get('gp_type')
-                        stub.shell_model = recipe_params.get('shell_model')
-                        stub.sensor_model = recipe_params.get('sensor_model')
-                        stub.body_model = recipe_params.get('body_model')
-                        
-                        # Convert numeric fields
-                        try:
-                            stub.nc_usage_1 = float(recipe_params['nc_usage_1']) if recipe_params.get('nc_usage_1') else None
-                        except (ValueError, TypeError):
-                            pass
-                        try:
-                            stub.nc_usage_2 = float(recipe_params['nc_usage_2']) if recipe_params.get('nc_usage_2') else None
-                        except (ValueError, TypeError):
-                            pass
-                        try:
-                            stub.gp_usage = float(recipe_params['gp_usage']) if recipe_params.get('gp_usage') else None
-                        except (ValueError, TypeError):
-                            pass
-                        try:
-                            stub.current = float(recipe_params['current']) if recipe_params.get('current') else None
-                        except (ValueError, TypeError):
-                            pass
-                    
-                    self.db.session.add(stub)
-                    self.db.session.flush()  # get stub.id without committing yet
-                    linked_sim_id = stub.id
+                        def _safe_float(key):
+                            try:
+                                return float(recipe_params[key]) if recipe_params.get(key) else None
+                            except (ValueError, TypeError):
+                                return None
+
+                        nc_usage_1 = _safe_float('nc_usage_1')
+                        nc_usage_2 = _safe_float('nc_usage_2')
+                        gp_usage   = _safe_float('gp_usage')
+                        current    = _safe_float('current')
+
+                        existing = Simulation.query.filter_by(
+                            ignition_model=recipe_params.get('ignition_model'),
+                            nc_type_1=recipe_params.get('nc_type_1'),
+                            nc_usage_1=nc_usage_1,
+                            nc_type_2=recipe_params.get('nc_type_2'),
+                            nc_usage_2=nc_usage_2,
+                            gp_type=recipe_params.get('gp_type'),
+                            gp_usage=gp_usage,
+                            shell_model=recipe_params.get('shell_model'),
+                            current=current,
+                            sensor_model=recipe_params.get('sensor_model'),
+                            body_model=recipe_params.get('body_model'),
+                        ).first()
+
+                        if existing:
+                            # Reuse the existing simulation; assign the work order
+                            # if it didn't have one yet.
+                            if not existing.work_order:
+                                existing.work_order = wo
+                            linked_sim_id = existing.id
+
+                    if linked_sim_id is None:
+                        # No matching simulation found — create a stub.
+                        stub = Simulation(user_id=user_id, work_order=wo)
+                        if recipe_params:
+                            stub.ignition_model = recipe_params.get('ignition_model')
+                            stub.nc_type_1      = recipe_params.get('nc_type_1')
+                            stub.nc_type_2      = recipe_params.get('nc_type_2')
+                            stub.gp_type        = recipe_params.get('gp_type')
+                            stub.shell_model    = recipe_params.get('shell_model')
+                            stub.sensor_model   = recipe_params.get('sensor_model')
+                            stub.body_model     = recipe_params.get('body_model')
+                            stub.nc_usage_1     = _safe_float('nc_usage_1')
+                            stub.nc_usage_2     = _safe_float('nc_usage_2')
+                            stub.gp_usage       = _safe_float('gp_usage')
+                            stub.current        = _safe_float('current')
+                        self.db.session.add(stub)
+                        self.db.session.flush()  # get stub.id without committing yet
+                        linked_sim_id = stub.id
             elif simulation_id:
                 try:
                     linked_sim_id = int(simulation_id)
@@ -141,6 +160,8 @@ class FileService:
             }
 
         except Exception as e:
+            # Roll back any partial DB changes so the session stays usable.
+            self.db.session.rollback()
             # Clean up file if database operation fails
             self.file_handler.delete_file(filepath)
             raise DataProcessingError(f'{ERROR_MESSAGES["file_parse_error"]}: {str(e)}')

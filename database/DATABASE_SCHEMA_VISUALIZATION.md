@@ -1,10 +1,17 @@
 # MGG Database Schema Visualization
 
+> **Future Target Schema — Not Currently Running**
+> This document describes the fully-normalized PostgreSQL schema planned for the `master` branch
+> (enterprise target). The **current running application** (`db-optimized` branch) uses a
+> simplified 3-table schema: `user`, `simulation`, `test_result`.
+> See [README.md](README.md) for the current schema.
+
 ## Overview
 
-This document provides comprehensive visual documentation of the MGG Simulation System database schema. It complements [README.md](README.md) (which covers architecture, installation, and operations) with detailed entity-relationship diagrams and data flow visualizations.
+This document provides visual documentation of the planned normalized MGG database schema
+(17 tables, PostgreSQL). It is retained as a design reference for future migration.
 
-**Database**: PostgreSQL 15
+**Database**: PostgreSQL 15 (future target)
 **Tables**: 17
 **Foreign Keys**: 22 relationships
 **Indexes**: 38 optimized indexes
