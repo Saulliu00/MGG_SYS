@@ -33,6 +33,7 @@ def reverse():
 
 @bp.route('/run', methods=['POST'])
 @login_required
+@research_required
 def run_simulation():
     """Run simulation with provided parameters"""
     try:
@@ -91,6 +92,7 @@ def run_simulation():
 
 @bp.route('/upload', methods=['POST'])
 @login_required
+@research_required
 def upload_test_result():
     """Upload actual test result file (.xlsx)"""
     try:
@@ -250,6 +252,7 @@ def experiment():
 
 @bp.route('/predict', methods=['POST'])
 @login_required
+@research_required
 def predict():
     """Run prediction"""
     try:
@@ -280,6 +283,7 @@ def predict():
 
 @bp.route('/save_to_data_folder', methods=['POST'])
 @login_required
+@research_required
 def save_to_data_folder():
     """Save uploaded .xlsx file to demo/data folder with NC value naming"""
     try:
