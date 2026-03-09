@@ -55,6 +55,18 @@ class User(db.Model, UserMixin):
 
 
 class Simulation(db.Model):
+    __tablename__ = 'simulation'
+    
+    # Unique constraint on recipe parameters (lab-wide deduplication)
+    __table_args__ = (
+        db.UniqueConstraint(
+            'ignition_model', 'nc_type_1', 'nc_usage_1', 'nc_type_2', 'nc_usage_2',
+            'gp_type', 'gp_usage', 'shell_model', 'current',
+            'sensor_model', 'body_model',
+            name='uq_simulation_recipe'
+        ),
+    )
+    
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
@@ -67,7 +79,7 @@ class Simulation(db.Model):
     gp_type = db.Column(db.String(50))  # GP类型
     gp_usage = db.Column(db.Float)  # GP用量 (毫克)
     shell_model = db.Column(db.String(50))  # 管壳高度 (mm)
-    current = db.Column(db.Float)  # 电流
+    current = db.Column(db.Float)  # 通电条件 (mA)
     sensor_model = db.Column(db.String(50))  # 传感器量程
     body_model = db.Column(db.String(50))  # 容积
     equipment = db.Column(db.String(50))  # 测试设备

@@ -1,6 +1,7 @@
 """Simulation service for handling simulation business logic"""
 import json
 from typing import Dict, List
+from sqlalchemy.exc import IntegrityError
 from app.models import Simulation, TestResult
 from app.utils.model_runner import run_forward_inference
 from app.utils.errors import SimulationError
@@ -99,13 +100,27 @@ class SimulationService:
 
             simulation.result_data = json.dumps(response_data)
             self.db.session.add(simulation)
-            self.db.session.commit()
-
-            return {
-                'success': True,
-                'simulation_id': simulation.id,
-                'data': response_data
-            }
+            
+            try:
+                self.db.session.commit()
+                return {
+                    'success': True,
+                    'simulation_id': simulation.id,
+                    'data': response_data
+                }
+            except IntegrityError:
+                # Unique constraint violated - another transaction inserted the same recipe
+                # Roll back and return the existing record
+                self.db.session.rollback()
+                existing = self._build_recipe_query(params).first()
+                if existing and existing.result_data:
+                    return {
+                        'success': True,
+                        'simulation_id': existing.id,
+                        'data': json.loads(existing.result_data)
+                    }
+                # If still not found, re-raise (should never happen)
+                raise SimulationError('Duplicate recipe detected but cannot find existing record')
 
         except SimulationError:
             raise

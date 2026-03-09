@@ -6,6 +6,297 @@
 
 ---
 
+## [2026-03-05] Database-Level Unique Constraint for Recipe Deduplication
+
+### Issue Reported
+User requested database-level enforcement of recipe deduplication (currently only enforced in application logic).
+
+### Root Cause Analysis
+
+**Current State:**
+- ✅ Application-level deduplication works well (in `simulation_service.py`)
+- ✅ Lab-wide recipe checking prevents duplicate simulations
+- ❌ BUT: No database constraint enforces this rule
+- ⚠️ Direct database insertions could bypass application logic and create duplicates
+
+**Risk:**
+- Database operations outside Flask (admin tools, migration scripts, direct SQL)
+- Race conditions in concurrent transactions
+- Data integrity relies solely on application code
+
+**Why Add DB Constraint:**
+- **Defense in depth**: Application logic + database constraint
+- **Data integrity**: Impossible to create duplicates at any level
+- **Race condition safety**: Database handles concurrent INSERT attempts
+- **Future-proof**: Protects against direct SQL operations
+
+### Fix Applied
+
+#### 1. Model Update: `app/models.py`
+
+**Added unique constraint to `Simulation` class:**
+
+```python
+class Simulation(db.Model):
+    __tablename__ = 'simulation'
+    
+    # Unique constraint on recipe parameters (lab-wide deduplication)
+    __table_args__ = (
+        db.UniqueConstraint(
+            'ignition_model', 'nc_type_1', 'nc_usage_1', 'nc_type_2', 'nc_usage_2',
+            'gp_type', 'gp_usage', 'shell_model', 'current',
+            'sensor_model', 'body_model',
+            name='uq_simulation_recipe'
+        ),
+    )
+```
+
+**Fields in Constraint (11 total):**
+- String: ignition_model, nc_type_1, nc_type_2, gp_type, shell_model, sensor_model, body_model
+- Numeric: nc_usage_1, nc_usage_2, gp_usage, current (通电条件)
+
+**Fields EXCLUDED from Constraint (metadata - can differ):**
+- user_id, employee_id, test_name, notes, work_order, equipment, created_at
+
+#### 2. Service Update: `app/services/simulation_service.py`
+
+**Added IntegrityError handling:**
+
+```python
+from sqlalchemy.exc import IntegrityError
+
+def run_forward_simulation(self, user_id: int, params: Dict) -> Dict:
+    # ... existing code ...
+    
+    try:
+        self.db.session.commit()
+        return {'success': True, 'simulation_id': simulation.id, 'data': response_data}
+    except IntegrityError:
+        # Unique constraint violated - another transaction inserted the same recipe
+        # Roll back and return the existing record
+        self.db.session.rollback()
+        existing = self._build_recipe_query(params).first()
+        if existing and existing.result_data:
+            return {
+                'success': True,
+                'simulation_id': existing.id,
+                'data': json.loads(existing.result_data)
+            }
+        # If still not found, re-raise (should never happen)
+        raise SimulationError('Duplicate recipe detected but cannot find existing record')
+```
+
+**How It Works:**
+1. Application logic checks for existing recipe (first layer) ✅
+2. If not found, runs simulation and attempts INSERT
+3. If another transaction inserted the same recipe (race condition):
+   - Database rejects with IntegrityError
+   - Application rolls back, queries for existing record
+   - Returns existing simulation (same behavior as pre-check)
+4. User gets cached result either way ✅
+
+#### 3. Migration Script: `migrations/add_recipe_unique_constraint.py`
+
+**Features:**
+- ✅ Detects existing duplicates
+- ✅ Offers to auto-remove duplicates (keeps oldest)
+- ✅ Creates new table with constraint
+- ✅ Migrates all data
+- ✅ Supports rollback with `--rollback` flag
+
+**Usage:**
+```bash
+# Apply migration
+python migrations/add_recipe_unique_constraint.py
+
+# Rollback (remove constraint)
+python migrations/add_recipe_unique_constraint.py --rollback
+```
+
+**Safety Features:**
+- Checks if constraint already exists (idempotent)
+- Backs up data during migration
+- Prompts user before deleting duplicates
+- Commits only after successful data migration
+
+### Testing
+
+#### Pre-Migration Check
+```bash
+cd /home/saul/.openclaw/workspace/MGG_SYS
+python migrations/add_recipe_unique_constraint.py
+```
+
+**Expected Output:**
+```
+Starting migration on database: instance/mgg_sys.db
+Checking for existing duplicates...
+✓ No duplicate recipes found
+Creating new table with unique constraint...
+Copying data to new table...
+Replacing old table...
+✓ Migration completed successfully!
+✓ Unique constraint 'uq_simulation_recipe' added to simulation table
+```
+
+#### Post-Migration Verification
+
+**Test 1: Application-Level Check (Still Works)**
+1. Run simulation with recipe A
+2. Run same recipe again
+3. ✅ Second run returns cached result (no new record)
+
+**Test 2: Database-Level Enforcement (New Protection)**
+1. Attempt direct SQL INSERT of duplicate recipe:
+   ```sql
+   INSERT INTO simulation (user_id, nc_usage_1, ...) VALUES (1, 100, ...);
+   INSERT INTO simulation (user_id, nc_usage_1, ...) VALUES (2, 100, ...);
+   ```
+2. ✅ Second INSERT fails with: `UNIQUE constraint failed: simulation.uq_simulation_recipe`
+
+**Test 3: Race Condition Handling**
+1. Two concurrent requests with same recipe
+2. First request: Creates record ✅
+3. Second request: Gets IntegrityError, returns cached result ✅
+4. Both users see same simulation_id ✅
+
+### Benefits
+
+**Before (Application-Only):**
+```
+┌────────────────────────┐
+│ Application Logic      │ ← Only protection layer
+│ (check → insert)       │
+└────────────────────────┘
+         ↓
+┌────────────────────────┐
+│ Database (SQLite)      │ ← No constraint
+│ (allows duplicates)    │
+└────────────────────────┘
+```
+
+**After (Defense in Depth):**
+```
+┌────────────────────────┐
+│ Application Logic      │ ← First layer: Fast check
+│ (check → insert)       │
+└────────────────────────┘
+         ↓
+┌────────────────────────┐
+│ Database (SQLite)      │ ← Second layer: Enforce constraint
+│ UNIQUE(recipe fields)  │    (handles race conditions)
+└────────────────────────┘
+```
+
+**Advantages:**
+- ✅ **Data integrity**: Impossible to create duplicates (even via direct SQL)
+- ✅ **Race condition safety**: Database serializes concurrent INSERTs
+- ✅ **Future-proof**: Protects against bugs in future code
+- ✅ **Performance**: No impact on read queries (constraint only checked on INSERT)
+- ✅ **User experience**: Same behavior - always get cached result for duplicate recipes
+
+### Database Schema Change
+
+**Before:**
+```sql
+CREATE TABLE simulation (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    ignition_model VARCHAR(50),
+    nc_type_1 VARCHAR(50),
+    nc_usage_1 FLOAT,
+    -- ... other fields ...
+    FOREIGN KEY (user_id) REFERENCES user(id)
+    -- No unique constraint ❌
+);
+```
+
+**After:**
+```sql
+CREATE TABLE simulation (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    ignition_model VARCHAR(50),
+    nc_type_1 VARCHAR(50),
+    nc_usage_1 FLOAT,
+    -- ... other fields ...
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    CONSTRAINT uq_simulation_recipe UNIQUE (
+        ignition_model, nc_type_1, nc_usage_1, nc_type_2, nc_usage_2,
+        gp_type, gp_usage, shell_model, current, sensor_model, body_model
+    )  -- Database-level enforcement ✅
+);
+```
+
+### Files Modified
+
+**Model:**
+- `app/models.py` (+13 lines)
+  - Added `__tablename__` (explicit)
+  - Added `__table_args__` with UniqueConstraint
+
+**Service:**
+- `app/services/simulation_service.py` (+20 lines, -4 lines)
+  - Import IntegrityError
+  - Wrap commit in try-except
+  - Handle race conditions gracefully
+
+**Migration:**
+- `migrations/add_recipe_unique_constraint.py` (NEW - 282 lines)
+  - Detect and remove duplicates
+  - Apply constraint to schema
+  - Support rollback
+
+**Documentation:**
+- `CHANGELOG.md` (this entry)
+
+### Migration Procedure
+
+**For Existing Deployments:**
+
+```bash
+# 1. Pull latest code
+cd /home/saul/.openclaw/workspace/MGG_SYS
+git pull origin db-optimized
+
+# 2. Backup database (safety)
+cp instance/mgg_sys.db instance/mgg_sys.db.backup
+
+# 3. Run migration
+python migrations/add_recipe_unique_constraint.py
+
+# 4. Restart Flask application
+# (system will now enforce constraint)
+```
+
+**For New Deployments:**
+- Constraint applied automatically via `app/models.py`
+- No migration needed (fresh database)
+
+### Rollback Plan
+
+**If Issues Arise:**
+
+```bash
+# Option 1: Use migration rollback
+python migrations/add_recipe_unique_constraint.py --rollback
+
+# Option 2: Restore from backup
+cp instance/mgg_sys.db.backup instance/mgg_sys.db
+
+# Option 3: Git revert
+git revert <commit-hash>
+```
+
+### Status
+
+**Implementation:** ✅ Complete  
+**Migration Script:** ✅ Ready  
+**Testing:** ⏳ Pending user verification  
+**Documentation:** ✅ Updated
+
+---
+
 ## [2026-03-04] Diagnosis: 正向 Legend Position Issue
 
 ### Issue Reported
