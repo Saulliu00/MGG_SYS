@@ -112,9 +112,9 @@ For **100 concurrent users**, the defaults (25+25=50 max connections, 5 workers 
 For **PostgreSQL**, also tune `postgresql.conf`:
 ```
 max_connections = 100
-shared_buffers = 256MB        # ~25% of RAM
-work_mem = 16MB
-effective_cache_size = 1GB    # ~50-75% of RAM
+shared_buffers = 16GB         # ~25% of RAM
+work_mem = 256MB
+effective_cache_size = 48GB   # ~75% of RAM
 ```
 
 ---

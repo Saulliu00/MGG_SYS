@@ -674,9 +674,9 @@ class DatabaseConfig:
 ```bash
 # /etc/postgresql/*/main/postgresql.conf
 
-# Memory Settings (for 16GB RAM server)
-shared_buffers = 4GB                # 25% of RAM
-effective_cache_size = 12GB         # 75% of RAM
+# Memory Settings (for 64GB RAM server)
+shared_buffers = 16GB               # 25% of RAM
+effective_cache_size = 48GB         # 75% of RAM
 work_mem = 64MB                     # Per operation
 maintenance_work_mem = 1GB
 
@@ -1581,13 +1581,13 @@ echo "Database maintenance completed"
 ### **Hardware Recommendations:**
 
 **Minimum Server Specs (100 users):**
-- CPU: 8 cores (Intel Xeon / AMD EPYC)
-- RAM: 16GB minimum, 32GB recommended
+- CPU: 16 cores (Intel Xeon / AMD EPYC)
+- RAM: 64GB
 - Storage: 500GB SSD (OS + app + database)
 - Backup Storage: 2TB NAS or external drive
 
 **Network:**
-- Gigabit Ethernet (minimum)
+- 10 Gigabit Ethernet
 - Dedicated VLAN for MGG traffic (recommended)
 
 ### **Software Dependencies:**
