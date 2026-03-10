@@ -12,11 +12,15 @@ Does NOT back up:
   - Source code (tracked in git)
 
 Usage:
-    python scripts/backup.py [--retention-days N]
+    python scripts/backup.py [--retention-days N] [--date YYYYMMDD]
+
+    --retention-days N   Keep backups for N days (default: 30)
+    --date YYYYMMDD      Label the backup with a specific date instead of today
+                         (e.g. --date 20260301 creates mgg_backup_20260301_000000.db)
 
 Recommended cron (daily at 02:00):
-    0 2 * * * cd /home/saul_liu/Desktop/MGG_SYS && \
-              /home/saul_liu/Desktop/MGG_SYS/venv/bin/python scripts/backup.py \
+    0 2 * * * cd /opt/mgg/MGG_SYS && \
+              /opt/mgg/MGG_SYS/venv/bin/python scripts/backup.py \
               >> /var/log/mgg_backup.log 2>&1
 
 Environment variables read:
@@ -39,6 +43,7 @@ BACKUP_DIR   = PROJECT_ROOT / 'instance' / 'backups'
 UPLOADS_DIR  = PROJECT_ROOT / 'instance' / 'uploads'
 LOGS_DIR     = PROJECT_ROOT / 'app' / 'log'
 
+# Set at startup; overridden by --date flag in main()
 TIMESTAMP = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 
@@ -137,14 +142,32 @@ def prune_old_backups(retention_days: int):
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 def main():
+    global TIMESTAMP
+
     parser = argparse.ArgumentParser(description='MGG_SYS daily backup')
     parser.add_argument(
         '--retention-days', type=int, default=30,
         help='Delete backups older than N days (default: 30)',
     )
+    parser.add_argument(
+        '--date', type=str, default=None,
+        metavar='YYYYMMDD',
+        help='Label the backup with this date instead of today '
+             '(e.g. --date 20260301 → mgg_backup_20260301_000000)',
+    )
     args = parser.parse_args()
 
+    if args.date:
+        try:
+            datetime.strptime(args.date, '%Y%m%d')
+        except ValueError:
+            print(f'ERROR: --date must be in YYYYMMDD format, got: {args.date}')
+            sys.exit(1)
+        TIMESTAMP = f'{args.date}_000000'
+
     print(f'\nMGG_SYS Backup  {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+    if args.date:
+        print(f'Label:       {TIMESTAMP}  (custom --date)')
     print(f'Destination: {BACKUP_DIR}')
     print()
 

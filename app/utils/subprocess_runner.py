@@ -65,7 +65,7 @@ class SubprocessRunner:
                 )
 
             # Check if script returned an error
-            if not response_data.get('success', True):
+            if not response_data.get('success', False):
                 error_msg = response_data.get('error', 'Unknown error')
                 raise SimulationError(f"Simulation error: {error_msg}")
 

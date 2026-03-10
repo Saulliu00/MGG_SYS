@@ -247,6 +247,7 @@ def experiment():
         })
 
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error('Experiment submission error: %s', e, exc_info=True)
         return jsonify({'success': False, 'message': '服务器内部错误，请稍后重试'}), 500
 
@@ -316,6 +317,7 @@ def save_to_data_folder():
 
 @bp.route('/load_test_data', methods=['POST'])
 @login_required
+@research_required
 def load_test_data():
     """Load test data from uploaded .xlsx file for comparison"""
     try:
@@ -357,6 +359,7 @@ def load_test_data():
 
 @bp.route('/validate_upload', methods=['POST'])
 @login_required
+@research_required
 def validate_upload():
     """Validate an uploaded test-data file without persisting it to the database."""
     try:
@@ -374,6 +377,7 @@ def validate_upload():
 
 @bp.route('/fetch_recipe_test_data', methods=['POST'])
 @login_required
+@research_required
 def fetch_recipe_test_data():
     """Find and return averaged test data matching the current recipe parameters."""
     try:
@@ -390,6 +394,7 @@ def fetch_recipe_test_data():
 
 @bp.route('/generate_comparison_chart', methods=['POST'])
 @login_required
+@research_required
 def generate_comparison_chart():
     """Generate comparison chart for simulation vs test data"""
     try:

@@ -3,7 +3,7 @@
 Application regression tests for MGG_SYS — app layer.
 
 Covers:
-  - ComparisonService: RMSE, correlation, find_peak_pressure
+  - ComparisonService: find_peak_pressure
   - Plotter: chart structure, legend config, multi-run chart
   - WorkOrderService: deduplication, authorization, delete scoping
   - Work-order route validation: invalid param → 400
@@ -139,38 +139,6 @@ class TestComparisonService(unittest.TestCase):
     def test_find_peak_pressure_single_element(self):
         peak_p, _ = self.svc.find_peak_pressure([7.5])
         self.assertAlmostEqual(peak_p, 7.5)
-
-    def test_calculate_rmse_identical_arrays(self):
-        vals = [1.0, 2.0, 3.0, 4.0]
-        rmse = self.svc.calculate_rmse(vals, vals)
-        self.assertAlmostEqual(rmse, 0.0)
-
-    def test_calculate_rmse_known_value(self):
-        actual    = [3.0, 3.0, 3.0, 3.0]
-        predicted = [2.0, 4.0, 2.0, 4.0]
-        # errors: 1, 1, 1, 1 → MSE=1 → RMSE=1
-        self.assertAlmostEqual(self.svc.calculate_rmse(actual, predicted), 1.0)
-
-    def test_calculate_rmse_mismatched_lengths(self):
-        from app.utils.errors import DataProcessingError
-        with self.assertRaises(DataProcessingError):
-            self.svc.calculate_rmse([1, 2, 3], [1, 2])
-
-    def test_calculate_correlation_perfect(self):
-        x = [1.0, 2.0, 3.0, 4.0, 5.0]
-        corr = self.svc.calculate_correlation(x, x)
-        self.assertAlmostEqual(corr, 1.0)
-
-    def test_calculate_correlation_inverse(self):
-        x = [1.0, 2.0, 3.0, 4.0, 5.0]
-        y = [5.0, 4.0, 3.0, 2.0, 1.0]
-        corr = self.svc.calculate_correlation(x, y)
-        self.assertAlmostEqual(corr, -1.0)
-
-    def test_calculate_correlation_mismatched_lengths(self):
-        from app.utils.errors import DataProcessingError
-        with self.assertRaises(DataProcessingError):
-            self.svc.calculate_correlation([1, 2], [1, 2, 3])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

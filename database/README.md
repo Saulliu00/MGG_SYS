@@ -1,7 +1,7 @@
 # MGG Database — Current Schema
 
 **Version:** 4.1 (Live / Implemented)
-**Engine:** SQLite (default) or PostgreSQL — switched by `DATABASE_URL` env var
+**Engine:** PostgreSQL (production) · SQLite (development/testing, when `DATABASE_URL` is not set)
 **Tables:** 3 (`user`, `simulation`, `test_result`)
 **Last Updated:** 2026-03-09
 
@@ -163,7 +163,7 @@ Typical row count: ~4,000 points per file.
 ```python
 from database.manager import init_database
 init_database(app)
-# Creates all tables, enables WAL mode (SQLite), seeds default admin
+# Creates all tables, seeds default admin (SQLite dev: also enables WAL mode)
 ```
 
 ### Backup
@@ -174,8 +174,8 @@ init_database(app)
 python scripts/backup.py
 
 # Cron — daily at 02:00
-0 2 * * * cd /home/saul_liu/Desktop/MGG_SYS && \
-          /home/saul_liu/Desktop/MGG_SYS/venv/bin/python scripts/backup.py \
+0 2 * * * cd /opt/mgg/MGG_SYS && \
+          /opt/mgg/MGG_SYS/venv/bin/python scripts/backup.py \
           >> /var/log/mgg_backup.log 2>&1
 ```
 
@@ -222,7 +222,7 @@ TestResult.query.filter_by(user_id=user_id).all()
 
 | Item | Path |
 |------|------|
-| SQLite database | `instance/simulation_system.db` |
+| SQLite database (dev only) | `instance/simulation_system.db` |
 | Database backups | `instance/backups/` |
 | Uploaded test files | `instance/uploads/` |
 | Temp files (validation) | `instance/temp/` |
