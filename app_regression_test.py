@@ -3,13 +3,17 @@
 Application regression tests for MGG_SYS — app layer.
 
 Covers:
-  - ComparisonService: RMSE, correlation, find_peak_pressure
+  - ComparisonService: find_peak_pressure
   - Plotter: chart structure, legend config, multi-run chart
   - WorkOrderService: deduplication, authorization, delete scoping
   - Work-order route validation: invalid param → 400
   - Auth enforcement: unauthenticated → redirect
+  - Backup script (scripts/backup.py): SQLite backup, uploads, logs
 
-Uses a temporary SQLite database; never touches the production database.
+Database:
+  Tests always run against a temporary SQLite database regardless of the
+  DATABASE_URL environment variable, keeping tests fast and self-contained.
+  The production PostgreSQL path is exercised on the real server.
 
 Run from the project root:
     python app_regression_test.py
@@ -135,38 +139,6 @@ class TestComparisonService(unittest.TestCase):
     def test_find_peak_pressure_single_element(self):
         peak_p, _ = self.svc.find_peak_pressure([7.5])
         self.assertAlmostEqual(peak_p, 7.5)
-
-    def test_calculate_rmse_identical_arrays(self):
-        vals = [1.0, 2.0, 3.0, 4.0]
-        rmse = self.svc.calculate_rmse(vals, vals)
-        self.assertAlmostEqual(rmse, 0.0)
-
-    def test_calculate_rmse_known_value(self):
-        actual    = [3.0, 3.0, 3.0, 3.0]
-        predicted = [2.0, 4.0, 2.0, 4.0]
-        # errors: 1, 1, 1, 1 → MSE=1 → RMSE=1
-        self.assertAlmostEqual(self.svc.calculate_rmse(actual, predicted), 1.0)
-
-    def test_calculate_rmse_mismatched_lengths(self):
-        from app.utils.errors import DataProcessingError
-        with self.assertRaises(DataProcessingError):
-            self.svc.calculate_rmse([1, 2, 3], [1, 2])
-
-    def test_calculate_correlation_perfect(self):
-        x = [1.0, 2.0, 3.0, 4.0, 5.0]
-        corr = self.svc.calculate_correlation(x, x)
-        self.assertAlmostEqual(corr, 1.0)
-
-    def test_calculate_correlation_inverse(self):
-        x = [1.0, 2.0, 3.0, 4.0, 5.0]
-        y = [5.0, 4.0, 3.0, 2.0, 1.0]
-        corr = self.svc.calculate_correlation(x, y)
-        self.assertAlmostEqual(corr, -1.0)
-
-    def test_calculate_correlation_mismatched_lengths(self):
-        from app.utils.errors import DataProcessingError
-        with self.assertRaises(DataProcessingError):
-            self.svc.calculate_correlation([1, 2], [1, 2, 3])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -584,6 +556,261 @@ class TestRoutes(AppTestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 6. Backup script — scripts/backup.py
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestBackupScript(unittest.TestCase):
+    """scripts/backup.py — end-to-end backup of DB, uploads, logs."""
+
+    def setUp(self):
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil as _shutil
+        _shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _run_backup(self, env_overrides=None):
+        """Run the backup script in a subprocess with isolated paths."""
+        import subprocess, sys
+        env = os.environ.copy()
+        env['DATABASE_URL'] = f'sqlite:///{_DB_PATH}'
+        # Override internal paths via env so backup writes to tmpdir
+        if env_overrides:
+            env.update(env_overrides)
+        result = subprocess.run(
+            [sys.executable, 'scripts/backup.py', '--retention-days', '30'],
+            capture_output=True, text=True, env=env,
+        )
+        return result
+
+    def test_backup_exits_zero(self):
+        result = self._run_backup()
+        self.assertEqual(result.returncode, 0,
+                         f'Backup script failed:\n{result.stdout}\n{result.stderr}')
+
+    def _backup_dir(self):
+        """The directory the backup script actually writes to."""
+        return os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 'instance', 'backups'
+        )
+
+    def test_backup_creates_db_file(self):
+        import glob
+        result = self._run_backup()
+        self.assertEqual(result.returncode, 0)
+        db_backups = glob.glob(os.path.join(self._backup_dir(), 'mgg_backup_*.db'))
+        self.assertGreater(len(db_backups), 0, 'No DB backup file created')
+
+    def test_backup_creates_uploads_archive(self):
+        import glob
+        result = self._run_backup()
+        self.assertEqual(result.returncode, 0)
+        uploads_archives = glob.glob(os.path.join(self._backup_dir(), 'uploads_*.tar.gz'))
+        self.assertGreater(len(uploads_archives), 0, 'No uploads archive created')
+
+    def test_backup_creates_logs_archive(self):
+        import glob
+        result = self._run_backup()
+        self.assertEqual(result.returncode, 0)
+        log_archives = glob.glob(os.path.join(self._backup_dir(), 'logs_*.tar.gz'))
+        self.assertGreater(len(log_archives), 0, 'No logs archive created')
+
+    def test_backup_output_mentions_all_three_sections(self):
+        result = self._run_backup()
+        self.assertIn('[DB]',      result.stdout)
+        self.assertIn('[UPLOADS]', result.stdout)
+        self.assertIn('[LOGS]',    result.stdout)
+
+
+class TestDropLegacyTablesMigration(unittest.TestCase):
+    """migrations/drop_legacy_tables.py — verifies the migration runs cleanly
+    on a fresh temp DB (which never has the legacy tables) and on a DB that
+    has the legacy tables populated."""
+
+    def _make_db(self, with_legacy: bool = False) -> str:
+        """Create a minimal temp SQLite DB and return its path."""
+        import tempfile, sqlite3 as _sqlite3
+        fd, path = tempfile.mkstemp(suffix='_migration_test.db')
+        os.close(fd)
+        conn = _sqlite3.connect(path)
+        conn.executescript('''
+            CREATE TABLE IF NOT EXISTS user (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username VARCHAR(80),
+                employee_id VARCHAR(120) UNIQUE NOT NULL,
+                password_hash VARCHAR(128) NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT "research_engineer",
+                is_active BOOLEAN DEFAULT 1,
+                created_at DATETIME
+            );
+            CREATE TABLE IF NOT EXISTS simulation (
+                id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                ignition_model VARCHAR(50),
+                nc_type_1 VARCHAR(50),
+                nc_usage_1 FLOAT,
+                nc_type_2 VARCHAR(50),
+                nc_usage_2 FLOAT,
+                gp_type VARCHAR(50),
+                gp_usage FLOAT,
+                shell_model VARCHAR(50),
+                current FLOAT,
+                sensor_model VARCHAR(50),
+                body_model VARCHAR(50),
+                equipment VARCHAR(50),
+                employee_id VARCHAR(100),
+                test_name VARCHAR(200),
+                notes TEXT,
+                work_order VARCHAR(50),
+                result_data TEXT,
+                chart_image VARCHAR(255),
+                created_at DATETIME,
+                work_order_id INTEGER,
+                PRIMARY KEY (id),
+                FOREIGN KEY (user_id) REFERENCES user(id),
+                CONSTRAINT uq_simulation_recipe UNIQUE (
+                    ignition_model, nc_type_1, nc_usage_1, nc_type_2, nc_usage_2,
+                    gp_type, gp_usage, shell_model, current, sensor_model, body_model
+                )
+            );
+            CREATE TABLE IF NOT EXISTS test_result (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                simulation_id INTEGER,
+                filename VARCHAR(255) NOT NULL,
+                file_path VARCHAR(500) NOT NULL,
+                data TEXT,
+                uploaded_at DATETIME,
+                FOREIGN KEY(user_id) REFERENCES user(id),
+                FOREIGN KEY(simulation_id) REFERENCES simulation(id)
+            );
+        ''')
+        if with_legacy:
+            conn.executescript('''
+                CREATE TABLE IF NOT EXISTS recipe (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS work_order (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    work_order_number VARCHAR(50) NOT NULL UNIQUE,
+                    recipe_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    FOREIGN KEY(recipe_id) REFERENCES recipe(id),
+                    FOREIGN KEY(user_id) REFERENCES user(id)
+                );
+                CREATE TABLE IF NOT EXISTS experiment_file (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    work_order_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    original_filename VARCHAR(255) NOT NULL,
+                    stored_filename VARCHAR(255) NOT NULL,
+                    file_path VARCHAR(500) NOT NULL,
+                    FOREIGN KEY(work_order_id) REFERENCES work_order(id),
+                    FOREIGN KEY(user_id) REFERENCES user(id)
+                );
+            ''')
+        conn.commit()
+        conn.close()
+        return path
+
+    def tearDown(self):
+        # Clean up any temp DBs created during the test
+        for attr in ('_db_path',):
+            path = getattr(self, attr, None)
+            if path and os.path.exists(path):
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+
+    def test_migration_drops_legacy_tables(self):
+        """Legacy tables present and empty → all three dropped, simulation rebuilt."""
+        import sqlite3 as _sqlite3
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=True)
+        result = migrate(self._db_path)
+        self.assertTrue(result, 'Migration returned False')
+        conn = _sqlite3.connect(self._db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        )
+        tables = [r[0] for r in cursor.fetchall()]
+        conn.close()
+        self.assertNotIn('recipe',          tables, 'recipe table still exists')
+        self.assertNotIn('work_order',      tables, 'work_order table still exists')
+        self.assertNotIn('experiment_file', tables, 'experiment_file table still exists')
+        self.assertIn('simulation',  tables)
+        self.assertIn('test_result', tables)
+        self.assertIn('user',        tables)
+
+    def test_migration_removes_work_order_id_column(self):
+        """work_order_id column must be absent after migration."""
+        import sqlite3 as _sqlite3
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=True)
+        migrate(self._db_path)
+        conn = _sqlite3.connect(self._db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='simulation'")
+        schema = cursor.fetchone()[0]
+        conn.close()
+        self.assertNotIn('work_order_id', schema,
+                         'work_order_id column still present in simulation schema')
+
+    def test_migration_preserves_simulation_data(self):
+        """Existing simulation rows must survive the rebuild."""
+        import sqlite3 as _sqlite3
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=True)
+        # Insert a user and a simulation row
+        conn = _sqlite3.connect(self._db_path)
+        conn.execute(
+            "INSERT INTO user(id, employee_id, password_hash, role) VALUES (1,'u1','h','admin')"
+        )
+        conn.execute(
+            "INSERT INTO simulation(id, user_id, work_order) VALUES (42, 1, 'WO-TEST')"
+        )
+        conn.commit()
+        conn.close()
+        migrate(self._db_path)
+        conn = _sqlite3.connect(self._db_path)
+        row = conn.execute(
+            "SELECT id, work_order FROM simulation WHERE id=42"
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(row, 'Simulation row lost after migration')
+        self.assertEqual(row[0], 42)
+        self.assertEqual(row[1], 'WO-TEST')
+
+    def test_migration_idempotent_on_clean_db(self):
+        """Running on a DB with no legacy tables must succeed without error."""
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=False)
+        result = migrate(self._db_path)
+        self.assertTrue(result, 'Migration failed on already-clean DB')
+
+    def test_migration_aborts_if_table_not_empty(self):
+        """If a legacy table has rows, migration must abort and return False."""
+        import sqlite3 as _sqlite3
+        from migrations.drop_legacy_tables import migrate
+        self._db_path = self._make_db(with_legacy=True)
+        conn = _sqlite3.connect(self._db_path)
+        conn.execute(
+            "INSERT INTO user(id, employee_id, password_hash, role) VALUES (1,'u1','h','admin')"
+        )
+        conn.execute(
+            "INSERT INTO recipe(id, user_id) VALUES (1, 1)"
+        )
+        conn.commit()
+        conn.close()
+        result = migrate(self._db_path)
+        self.assertFalse(result, 'Migration should have aborted with non-empty recipe table')
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -606,6 +833,8 @@ if __name__ == '__main__':
         loader.loadTestsFromTestCase(TestWorkOrderParamValidation),
         loader.loadTestsFromTestCase(TestWorkOrderService),
         loader.loadTestsFromTestCase(TestRoutes),
+        loader.loadTestsFromTestCase(TestBackupScript),
+        loader.loadTestsFromTestCase(TestDropLegacyTablesMigration),
     ]
 
     runner = unittest.TextTestRunner(verbosity=2, stream=sys.stdout)

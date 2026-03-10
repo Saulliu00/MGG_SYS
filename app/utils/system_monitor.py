@@ -1,12 +1,12 @@
 """System monitoring utilities — CPU, memory, disk, DB stats, log analysis.
 
-No Flask imports. Pure Python. Call get_system_metrics() from a route handler
-and pass the result dict directly to the template.
+No direct Flask imports at module level. Uses SQLAlchemy ORM for DB queries
+(requires an active app context — always called from within a request handler).
+Works with both SQLite (dev) and PostgreSQL (production).
 """
 import os
-import sqlite3
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import psutil
@@ -16,12 +16,8 @@ from app.config.network_config import NETWORK_LOGGING
 # Slow-request threshold in milliseconds (config stores it in seconds)
 _SLOW_MS = NETWORK_LOGGING['slow_request_threshold'] * 1000
 
-# All tables in the db-optimized schema
-_DB_TABLES = [
-    'user', 'recipe', 'work_order', 'experiment_file',
-    'simulation', 'simulation_time_series',
-    'test_result', 'test_time_series', 'pt_comparison',
-]
+# Current 3-table schema
+_DB_TABLES = ['user', 'simulation', 'test_result']
 
 # Brute-force detection threshold: flag IPs with more than this many failures today
 _BRUTE_FORCE_THRESHOLD = 5
@@ -34,12 +30,18 @@ _ACTIVE_MINUTES = 30
 # Private helpers
 # ---------------------------------------------------------------------------
 
+def _is_postgres() -> bool:
+    return os.environ.get('DATABASE_URL', '').startswith('postgresql')
+
+
 def _resolve_db_path() -> str:
-    """Return absolute path to the SQLite database file."""
+    """Return absolute path to the SQLite DB file, or '' for PostgreSQL."""
     db_url = os.environ.get('DATABASE_URL', '')
     if db_url.startswith('sqlite:///'):
         return db_url[len('sqlite:///'):]
-    # Walk up: app/utils/ → app/ → project_root → instance/
+    if db_url.startswith('postgresql'):
+        return ''
+    # Default SQLite fallback
     project_root = Path(__file__).parent.parent.parent
     return str(project_root / 'instance' / 'simulation_system.db')
 
@@ -82,9 +84,24 @@ def get_system_resources() -> dict:
 
 def get_disk_usage(db_path: str, uploads_path: str, backups_path: str) -> dict:
     """File-system sizes for the three key locations."""
-    db_bytes = os.path.getsize(db_path) if os.path.isfile(db_path) else 0
     uploads_bytes, uploads_count = _dir_size_and_count(uploads_path)
     backups_bytes, backups_count = _dir_size_and_count(backups_path)
+
+    # SQLite: file size on disk. PostgreSQL: query pg_database_size().
+    if db_path and os.path.isfile(db_path):
+        db_bytes = os.path.getsize(db_path)
+    elif _is_postgres():
+        try:
+            from sqlalchemy import text
+            from app import db
+            db_bytes = int(db.session.execute(
+                text('SELECT pg_database_size(current_database())')
+            ).scalar() or 0)
+        except Exception:
+            db_bytes = 0
+    else:
+        db_bytes = 0
+
     return {
         'db_size_mb':         _mb(db_bytes),
         'uploads_size_mb':    _mb(uploads_bytes),
@@ -95,35 +112,50 @@ def get_disk_usage(db_path: str, uploads_path: str, backups_path: str) -> dict:
 
 
 def get_db_stats(db_path: str) -> dict:
-    """Row counts per table, file size, and backup info."""
-    file_size_mb = _mb(os.path.getsize(db_path)) if os.path.isfile(db_path) else 0
+    """Row counts per table and backup inventory. Uses SQLAlchemy ORM — works for
+    both SQLite and PostgreSQL without raw SQL or file-path assumptions."""
+    from sqlalchemy import inspect as sa_inspect, text
+    from app import db
 
-    table_counts = {t: 0 for t in _DB_TABLES}
-    if os.path.isfile(db_path):
-        conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
+    # Discover all tables dynamically so the UI always reflects the real schema
+    table_counts = {}
+    try:
+        table_names = sorted(sa_inspect(db.engine).get_table_names())
+        for t in table_names:
+            try:
+                table_counts[t] = db.session.execute(
+                    text(f'SELECT COUNT(*) FROM "{t}"')
+                ).scalar() or 0
+            except Exception:
+                table_counts[t] = '?'
+    except Exception:
+        # Fallback to the 3 known ORM models
+        from app.models import User, Simulation, TestResult
+        table_counts = {'user': 0, 'simulation': 0, 'test_result': 0}
         try:
-            for table in _DB_TABLES:
-                # Validate against hardcoded whitelist before interpolating into SQL
-                if table not in _DB_TABLES:
-                    continue
-                try:
-                    row = conn.execute(
-                        'SELECT COUNT(*) FROM "{}"'.format(table)
-                    ).fetchone()
-                    table_counts[table] = row[0] if row else 0
-                except sqlite3.OperationalError:
-                    pass  # Table may not exist yet on a fresh DB
-        finally:
-            conn.close()
+            table_counts['user']        = User.query.count()
+            table_counts['simulation']  = Simulation.query.count()
+            table_counts['test_result'] = TestResult.query.count()
+        except Exception:
+            pass
 
-    # Backup inventory (backup_database() writes mgg_backup_<timestamp>.db)
-    backups_dir = os.path.join(os.path.dirname(db_path), 'backups')
-    backup_files = sorted([
-        f for f in os.listdir(backups_dir)
-        if f.startswith('mgg_backup_') and f.endswith('.db')
-    ]) if os.path.isdir(backups_dir) else []
+    # File size: meaningful for SQLite only; PostgreSQL size is in get_disk_usage
+    file_size_mb = _mb(os.path.getsize(db_path)) if db_path and os.path.isfile(db_path) else 0
+
+    # Backup inventory: .db = SQLite backups, .dump = pg_dump backups
+    backups_dir = (
+        os.path.join(os.path.dirname(db_path), 'backups')
+        if db_path
+        else str(Path(__file__).parent.parent.parent / 'instance' / 'backups')
+    )
+    backup_files = []
+    if os.path.isdir(backups_dir):
+        backup_files = sorted([
+            f for f in os.listdir(backups_dir)
+            if f.startswith('mgg_backup_') and (f.endswith('.db') or f.endswith('.dump'))
+        ])
     latest_backup = (
-        backup_files[-1].replace('mgg_backup_', '').replace('.db', '')
+        backup_files[-1].replace('mgg_backup_', '').rsplit('.', 1)[0]
         if backup_files else None
     )
 
@@ -137,19 +169,28 @@ def get_db_stats(db_path: str) -> dict:
 
 def get_request_stats() -> dict:
     """Analyse today's CSV log for request-level statistics."""
-    from app.utils.log_manager import log_manager  # local import — avoids circular at module level
+    from app.utils.log_manager import log_manager
     entries = log_manager.read_log_file(filename=None, max_rows=50000)
 
     total = errors = slow = 0
+    error_entries = []
     for row in entries:
         sc = row.get('status_code', '')
         dm = row.get('duration_ms', '')
         if not sc:
-            continue  # skip non-request log entries
+            continue
         total += 1
         try:
             if int(sc) >= 400:
                 errors += 1
+                error_entries.append({
+                    'time':        row.get('time', ''),
+                    'method':      row.get('method', ''),
+                    'path':        row.get('path', ''),
+                    'status_code': sc,
+                    'username':    row.get('username', ''),
+                    'message':     row.get('message', ''),
+                })
         except ValueError:
             pass
         try:
@@ -164,20 +205,15 @@ def get_request_stats() -> dict:
         'error_count':        errors,
         'slow_request_count': slow,
         'error_rate_percent': error_rate,
+        'recent_errors':      error_entries[-20:][::-1],  # newest first, up to 20
     }
 
 
 def get_crash_events() -> list:
-    """Return up to 50 ERROR/CRITICAL log entries since the last app startup.
-
-    Errors from before the most recent restart are considered resolved and are
-    not shown — they automatically disappear when the page is refreshed after
-    a restart or fix deployment.
-    """
+    """Return up to 50 ERROR/CRITICAL log entries since the last app startup."""
     from app.utils.log_manager import log_manager
     entries = log_manager.read_log_file(filename=None, max_rows=50000)
 
-    # Find the timestamp of the most recent system_startup entry
     last_startup_ts = None
     for row in entries:
         if row.get('action') == 'system_startup':
@@ -196,7 +232,6 @@ def get_crash_events() -> list:
         }
         for row in entries
         if row.get('level') in ('ERROR', 'CRITICAL')
-        # Only include errors that occurred after the last startup
         and (last_startup_ts is None or row.get('timestamp', '') >= last_startup_ts)
     ]
     return crashes[:50]
@@ -207,10 +242,7 @@ def get_access_failures() -> dict:
     from app.utils.log_manager import log_manager
     entries = log_manager.read_log_file(filename=None, max_rows=50000)
 
-    failures = [
-        row for row in entries
-        if row.get('action') == 'user_login_failed'
-    ]
+    failures = [row for row in entries if row.get('action') == 'user_login_failed']
 
     ip_counts: dict = defaultdict(int)
     for row in failures:
@@ -221,7 +253,6 @@ def get_access_failures() -> dict:
         for ip, count in sorted(ip_counts.items(), key=lambda x: -x[1])
         if count > _BRUTE_FORCE_THRESHOLD
     ]
-
     recent = [
         {
             'time':     row.get('time', ''),
@@ -239,32 +270,31 @@ def get_access_failures() -> dict:
 
 
 def get_active_users(db_path: str) -> list:
-    """Users who made a request within the last _ACTIVE_MINUTES minutes."""
-    if not os.path.isfile(db_path):
-        return []
-    conn = sqlite3.connect(f'file:{db_path}?mode=ro', uri=True)
+    """Users who made a request within the last _ACTIVE_MINUTES minutes.
+    Uses SQLAlchemy ORM — works for both SQLite and PostgreSQL."""
+    from app.models import User
+
+    cutoff = datetime.utcnow() - timedelta(minutes=_ACTIVE_MINUTES)
     try:
-        rows = conn.execute(
-            '''SELECT id, employee_id, username, role, last_seen_at
-               FROM "user"
-               WHERE last_seen_at IS NOT NULL
-                 AND last_seen_at >= datetime('now', ?)
-               ORDER BY last_seen_at DESC''',
-            (f'-{_ACTIVE_MINUTES} minutes',)
-        ).fetchall()
-    except sqlite3.OperationalError:
-        return []  # columns not yet migrated on first boot
-    finally:
-        conn.close()
+        rows = (
+            User.query
+            .filter(User.last_seen_at.isnot(None))
+            .filter(User.last_seen_at >= cutoff)
+            .order_by(User.last_seen_at.desc())
+            .all()
+        )
+    except Exception:
+        return []
+
     return [
         {
-            'id':           r[0],
-            'employee_id':  r[1],
-            'username':     r[2] or '',
-            'role':         r[3],
-            'last_seen_at': r[4],
+            'id':           u.id,
+            'employee_id':  u.employee_id,
+            'username':     u.username or '',
+            'role':         u.role,
+            'last_seen_at': u.last_seen_at.isoformat() if u.last_seen_at else None,
         }
-        for r in rows
+        for u in rows
     ]
 
 
@@ -276,7 +306,11 @@ def get_system_metrics() -> dict:
     """Collect all metrics. Each section is isolated — one failure won't crash the page."""
     db_path = _resolve_db_path()
     uploads_path = str(Path(__file__).parent.parent / 'static' / 'uploads')
-    backups_path = os.path.join(os.path.dirname(db_path), 'backups')
+    backups_path = (
+        os.path.join(os.path.dirname(db_path), 'backups')
+        if db_path
+        else str(Path(__file__).parent.parent.parent / 'instance' / 'backups')
+    )
 
     metrics: dict = {}
 

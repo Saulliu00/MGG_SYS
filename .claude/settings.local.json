@@ -64,7 +64,11 @@
       "Bash(venv/bin/python app_regression_test.py)",
       "Bash(venv/bin/python migrations/add_recipe_unique_constraint.py)",
       "Bash(sqlite3 instance/simulation_system.db \".schema simulation\")",
-      "Bash(sqlite3 instance/simulation_system.db \":*)"
+      "Bash(sqlite3 instance/simulation_system.db \":*)",
+      "Bash(git checkout master)",
+      "Bash(git merge --ff-only db-optimized)",
+      "Bash(git checkout db-optimized)",
+      "Bash(SECRET_KEY=test ADMIN_PASSWORD=TestAdmin1! venv/bin/python app_regression_test.py)"
     ]
   }
 }

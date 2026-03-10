@@ -1008,18 +1008,19 @@ class TestBackup(unittest.TestCase):
         for expected in ['user', 'simulation', 'test_result', 'simulation_time_series']:
             self.assertIn(expected, tables, f'Table "{expected}" missing from backup')
 
-    def test_backup_skipped_for_non_sqlite(self):
+    def test_backup_postgresql_calls_pg_dump(self):
+        """PostgreSQL backup path invokes pg_dump (mocked — pg_dump need not be installed)."""
         from database import backup_database
-        from unittest.mock import patch
+        from unittest.mock import patch, MagicMock
+        mock_result = MagicMock()
+        mock_result.returncode = 0
         with self.app.app_context():
             with patch.dict(self.app.config,
                             {'SQLALCHEMY_DATABASE_URI': 'postgresql://u:p@localhost/fake'}):
-                try:
+                with patch('subprocess.run', return_value=mock_result) as mock_run:
                     backup_database(self.app)
-                except ValueError:
-                    pass  # Expected: raises ValueError for non-SQLite, not an unhandled crash
-                except Exception as e:
-                    self.fail(f'Unexpected error for non-SQLite: {e}')
+                    called_cmd = mock_run.call_args[0][0]
+                    self.assertEqual(called_cmd[0], 'pg_dump')
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,6 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import os
 import secrets
-import sqlite3
 from datetime import datetime
 from flask_login import current_user
 from app.config.network_config import (
@@ -44,16 +43,26 @@ def create_app():
             'Set it before starting the application: export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")'
         )
     app.config['SECRET_KEY'] = secret_key
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL') or \
+    db_uri = os.environ.get('DATABASE_URL') or \
         'sqlite:///' + os.path.join(app.instance_path, 'simulation_system.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        'pool_size': 25,       # Permanent connections — sized above gunicorn worker threads (~36 on 4-core)
-        'max_overflow': 25,    # Burst headroom → 50 total max, handles 100 concurrent users
-        'pool_timeout': 10,    # Fail fast (10s) instead of the 30s default that caused stalls
-        'pool_recycle': 3600,  # Recycle idle connections every hour
-        'pool_pre_ping': True, # Discard stale connections before use
-    }
+
+    # Pool settings differ between PostgreSQL and SQLite.
+    # PostgreSQL supports full connection pooling; SQLite uses a single file
+    # and only needs check_same_thread disabled for multi-threaded Gunicorn.
+    if db_uri.startswith('postgresql'):
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+            'pool_size': 25,       # Sized to match gunicorn workers × threads (5×5=25)
+            'max_overflow': 25,    # Burst headroom → 50 total max
+            'pool_timeout': 10,    # Fail fast instead of 30s default
+            'pool_recycle': 3600,  # Recycle idle connections every hour
+            'pool_pre_ping': True, # Discard stale connections before use
+        }
+    else:
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+            'connect_args': {'check_same_thread': False},
+        }
     app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'static', 'uploads')
 
     # Network configuration from network_config.py
@@ -131,33 +140,10 @@ def create_app():
     app.register_blueprint(simulation.bp)
     app.register_blueprint(work_order.wp)
 
-    # Create database tables
+    # Create database tables and seed default admin
     with app.app_context():
         db.create_all()
 
-        # Migration: add last_seen_at / session_token to existing SQLite databases
-        db_uri = app.config['SQLALCHEMY_DATABASE_URI']
-        if db_uri.startswith('sqlite:///'):
-            db_path = db_uri[len('sqlite:///'):]
-            if os.path.isfile(db_path):
-                try:
-                    conn = sqlite3.connect(db_path)
-                    cursor = conn.cursor()
-                    cursor.execute('PRAGMA table_info(user)')
-                    cols = [c[1] for c in cursor.fetchall()]
-                    if 'last_seen_at' not in cols:
-                        cursor.execute('ALTER TABLE "user" ADD COLUMN last_seen_at DATETIME')
-                        conn.commit()
-                    if 'session_token' not in cols:
-                        cursor.execute('ALTER TABLE "user" ADD COLUMN session_token VARCHAR(64)')
-                        conn.commit()
-                    conn.close()
-                except Exception as mig_err:
-                    app.logger.error(
-                        'Database migration failed — columns last_seen_at / session_token '
-                        'may be missing, which will cause runtime errors: %s',
-                        mig_err, exc_info=True
-                    )
         # Create default admin user if not exists
         from app.models import User
         admin_user = User.query.filter_by(employee_id='admin').first()

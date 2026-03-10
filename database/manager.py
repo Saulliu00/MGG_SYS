@@ -257,43 +257,56 @@ def reset_database(app):
 
 def backup_database(app, backup_path=None):
     """
-    Create a backup of the SQLite database.
-    
-    For PostgreSQL, use pg_dump instead.
-    
+    Create a database backup.
+
+    - SQLite: copies the .db file to the backups directory.
+    - PostgreSQL: runs pg_dump (custom format) — requires pg_dump on PATH.
+
     Args:
         app: Flask application instance
-        backup_path: Optional custom backup path (defaults to ./backups/)
-    
+        backup_path: Optional custom backup directory (defaults to instance/backups/)
+
     Returns:
-        str: Path to backup file
+        str: Path to the created backup file
     """
     import shutil
+    import subprocess
     from datetime import datetime
-    
+
     db_uri = app.config['SQLALCHEMY_DATABASE_URI']
-    if not db_uri.startswith('sqlite:///'):
-        raise ValueError('Backup function only works with SQLite. Use pg_dump for PostgreSQL.')
-    
-    db_path = db_uri.replace('sqlite:///', '')
-    if not os.path.exists(db_path):
-        raise FileNotFoundError(f'Database file not found: {db_path}')
-    
-    # Create backups directory
-    if backup_path is None:
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    # Determine backup directory
+    if backup_path is not None:
+        backup_dir = backup_path
+    elif db_uri.startswith('sqlite:///'):
+        db_path = db_uri.replace('sqlite:///', '')
         backup_dir = os.path.join(os.path.dirname(db_path), 'backups')
     else:
-        backup_dir = backup_path
-    
+        # PostgreSQL: store alongside the instance directory
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        backup_dir = os.path.join(project_root, 'instance', 'backups')
+
     os.makedirs(backup_dir, exist_ok=True)
-    
-    # Generate backup filename with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_filename = f'mgg_backup_{timestamp}.db'
-    backup_fullpath = os.path.join(backup_dir, backup_filename)
-    
-    # Copy database file
-    shutil.copy2(db_path, backup_fullpath)
+
+    if db_uri.startswith('sqlite:///'):
+        db_path = db_uri.replace('sqlite:///', '')
+        if not os.path.exists(db_path):
+            raise FileNotFoundError(f'SQLite database not found: {db_path}')
+        backup_fullpath = os.path.join(backup_dir, f'mgg_backup_{timestamp}.db')
+        shutil.copy2(db_path, backup_fullpath)
+
+    elif db_uri.startswith('postgresql'):
+        backup_fullpath = os.path.join(backup_dir, f'mgg_backup_{timestamp}.dump')
+        result = subprocess.run(
+            ['pg_dump', '--format=custom', '--file', backup_fullpath, db_uri],
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f'pg_dump failed: {result.stderr.decode().strip()}')
+
+    else:
+        raise ValueError(f'Unsupported DATABASE_URL scheme: {db_uri}')
+
     app.logger.info(f'✓ Database backed up to: {backup_fullpath}')
-    
     return backup_fullpath

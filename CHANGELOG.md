@@ -5,6 +5,43 @@ New entries go at the top.
 
 ---
 
+## [2026-03-09] Schema cleanup: drop legacy tables
+
+### Changes
+- **`migrations/drop_legacy_tables.py`** (new): drops three empty, abandoned tables (`recipe`, `work_order`, `experiment_file`) and removes the stale `work_order_id` column from `simulation`. These were from a prior design iteration that was superseded by the current `simulation.work_order` string column + `test_result` table approach.
+- **`app_regression_test.py`**: added `TestDropLegacyTablesMigration` (5 tests); total now 67.
+- **`database/README.md`**: version bumped to 4.1.
+
+Migration run on `instance/simulation_system.db` 2026-03-09. Tables after cleanup: `user`, `simulation`, `test_result`.
+
+---
+
+## [2026-03-09] PostgreSQL support + automated daily backup
+
+### Changes
+
+**PostgreSQL support (`app/__init__.py`, `requirements.txt`):**
+- Added `psycopg2-binary>=2.9.11` dependency
+- `SQLALCHEMY_ENGINE_OPTIONS` is now conditional: PostgreSQL gets full connection pooling (`pool_size=25`, `max_overflow=25`, `pool_timeout=10`, `pool_recycle=3600`, `pool_pre_ping=True`); SQLite keeps `check_same_thread=False`
+- Removed SQLite-only migration block that used raw `sqlite3.connect()` + `PRAGMA table_info`
+- Setting `DATABASE_URL=postgresql://...` is all that is needed to switch from SQLite to PostgreSQL
+
+**System monitor (`app/utils/system_monitor.py`):**
+- Removed all `sqlite3.connect()` calls; replaced with SQLAlchemy ORM queries
+- PostgreSQL DB size now retrieved via `pg_database_size(current_database())`
+- Backup inventory updated to recognise both `.db` (SQLite) and `.dump` (pg_dump) files
+- `_DB_TABLES` updated from stale 9-table list to current 3-table schema
+
+**Database backup (`database/manager.py`, `scripts/backup.py`):**
+- `backup_database()` now supports both SQLite (file copy) and PostgreSQL (`pg_dump --format=custom`)
+- New `scripts/backup.py`: standalone cron-ready script that backs up database + `instance/uploads/` + `app/log/` as dated archives; `--retention-days N` (default 30)
+
+**Tests (`app_regression_test.py`):**
+- Added `TestBackupScript` (5 tests): zero exit code, DB archive, uploads archive, logs archive, stdout mentions all three sections
+- Total: 62 tests, all passing
+
+---
+
 ## [2026-03-09] Fix: UNIQUE constraint crash on test result upload
 
 ### Problem

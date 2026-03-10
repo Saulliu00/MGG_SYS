@@ -46,11 +46,17 @@ def add_user():
     password = request.form.get('password')
     role = request.form.get('role', 'research_engineer')
 
+    if not employee_id or not employee_id.strip():
+        return jsonify({'success': False, 'message': '工号不能为空'}), 400
+
     if role not in ('admin', 'lab_engineer', 'research_engineer'):
-        return jsonify({'success': False, 'message': '无效的角色'})
+        return jsonify({'success': False, 'message': '无效的角色'}), 400
+
+    if not password or len(password) < 8:
+        return jsonify({'success': False, 'message': '密码长度不能少于8位'}), 400
 
     if User.query.filter_by(employee_id=employee_id).first():
-        return jsonify({'success': False, 'message': '工号已被注册'})
+        return jsonify({'success': False, 'message': '工号已被注册'}), 409
 
     new_user = User(employee_id=employee_id, username=username, role=role)
     new_user.set_password(password)
@@ -117,6 +123,9 @@ def reset_password(user_id):
     user = User.query.get_or_404(user_id)
     new_password = request.form.get('new_password')
 
+    if not new_password or len(new_password) < 8:
+        return jsonify({'success': False, 'message': '密码长度不能少于8位'}), 400
+
     user.set_password(new_password)
     db.session.commit()
 
@@ -157,7 +166,7 @@ def view_log():
     """View specific log file contents"""
     raw_filename = request.args.get('filename')
     filename = sanitize(raw_filename) if raw_filename else None
-    max_rows = int(request.args.get('max_rows', ADMIN_LOG_VIEW.get('max_rows_display', 1000)))
+    max_rows = min(max(int(request.args.get('max_rows', ADMIN_LOG_VIEW.get('max_rows_display', 1000))), 1), 10000)
 
     # Read log entries
     if filename:
