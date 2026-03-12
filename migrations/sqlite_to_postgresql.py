@@ -26,6 +26,43 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 SQLITE_PATH  = PROJECT_ROOT / 'instance' / 'simulation_system.db'
 
 
+def _create_indexes(pg_db):
+    """Create performance indexes concurrently (no table lock, safe on live DB)."""
+    indexes = [
+        # INDEX 1: work_order lookups — 5+ query paths, currently full scan
+        (
+            'ix_simulation_work_order',
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_simulation_work_order "
+            "ON simulation (work_order) "
+            "WHERE work_order IS NOT NULL AND work_order != ''"
+        ),
+        # INDEX 2: simulation history page — filter+sort without extra heap sort
+        (
+            'ix_simulation_user_id_created_at',
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_simulation_user_id_created_at "
+            "ON simulation (user_id, created_at)"
+        ),
+        # INDEX 3: test_result.simulation_id FK — 3x IN-clause queries, no auto-index in PG
+        (
+            'ix_test_result_simulation_id',
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_test_result_simulation_id "
+            "ON test_result (simulation_id)"
+        ),
+        # INDEX 4: test_result.user_id — authorization check filter
+        (
+            'ix_test_result_user_id',
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_test_result_user_id "
+            "ON test_result (user_id)"
+        ),
+    ]
+
+    # CONCURRENTLY requires autocommit (cannot run inside a transaction block)
+    with pg_db.engine.connect().execution_options(isolation_level='AUTOCOMMIT') as conn:
+        for name, sql in indexes:
+            conn.execute(pg_db.text(sql))
+            print(f'  [index]       {name}  OK')
+
+
 def main():
     db_url = os.environ.get('DATABASE_URL', '')
     if not db_url.startswith('postgresql'):
@@ -49,6 +86,11 @@ def main():
 
     with app.app_context():
         pg_db.create_all()
+
+        # ── 0. Indexes ────────────────────────────────────────────────────────
+        # CREATE INDEX CONCURRENTLY cannot run inside a transaction, so we use
+        # a raw AUTOCOMMIT connection. IF NOT EXISTS makes this idempotent.
+        _create_indexes(pg_db)
 
         # ── 1. Users ──────────────────────────────────────────────────────────
         rows = src.execute('SELECT * FROM user').fetchall()

@@ -65,6 +65,14 @@ class Simulation(db.Model):
             'sensor_model', 'body_model',
             name='uq_simulation_recipe'
         ),
+        # INDEX 1: work_order lookups (5+ hot query paths in work_order_service)
+        db.Index(
+            'ix_simulation_work_order',
+            'work_order',
+            postgresql_where=db.text("work_order IS NOT NULL AND work_order != ''")
+        ),
+        # INDEX 2: history page — filter by user, sort by date (default landing page for lab_engineers)
+        db.Index('ix_simulation_user_id_created_at', 'user_id', 'created_at'),
     )
     
     id = db.Column(db.Integer, primary_key=True)
@@ -102,8 +110,10 @@ class Simulation(db.Model):
 
 class TestResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    simulation_id = db.Column(db.Integer, db.ForeignKey('simulation.id'), nullable=True)
+    # INDEX 4: authorization check filter_by(id=..., user_id=...)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    # INDEX 3: FK with no auto-index; used in 3x IN-clause queries in work_order_service
+    simulation_id = db.Column(db.Integer, db.ForeignKey('simulation.id'), nullable=True, index=True)
 
     filename = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)
