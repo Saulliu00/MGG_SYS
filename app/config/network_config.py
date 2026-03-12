@@ -39,10 +39,12 @@ SESSION_CONFIG = {
 # Worker configuration for multi-user access
 # Target: 100 concurrent users
 # Formula: workers × threads = total concurrent handlers
-# On 4-core Pi: 5 workers × 5 threads = 25 handlers (< pool_size=25, no contention)
+#   Dev (4-core Pi):        min(5, 9)=5 workers × 6 threads = 30 handlers
+#   Prod (16-core server):  min(17, 9)=9 workers × 6 threads = 54 handlers
+# DB pool_size (50) + max_overflow (50) = 100 max PG connections (>= handlers, safe for 100 users)
 WORKER_CONFIG = {
-    'workers': min(os.cpu_count() + 1, 5),  # Cap at 5 workers to stay within pool_size
-    'threads': 5,                            # 5 threads per worker → 25 total handlers max
+    'workers': min(os.cpu_count() + 1, 9),  # Up to 9 workers on ≥8-core production server
+    'threads': 6,                            # 6 threads per worker → 54 handlers on prod
     'worker_class': 'sync',                  # Worker class (sync, gevent, eventlet)
     'max_requests': 1000,                    # Max requests per worker before restart
     'max_requests_jitter': 50,               # Random jitter to prevent all workers restarting simultaneously
