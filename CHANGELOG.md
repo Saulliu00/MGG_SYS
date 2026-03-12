@@ -5,6 +5,59 @@ New entries go at the top.
 
 ---
 
+## [2026-03-12] Production hardening: tests, pool, indexes, staging plan
+
+### Changes
+
+**Database indexes (`app/models.py`, `migrations/sqlite_to_postgresql.py`):**
+- Added 4 B-tree indexes to eliminate full table scans on hot query paths:
+  - `ix_simulation_work_order` (partial, non-null/non-empty): 5+ work-order route lookups
+  - `ix_simulation_user_id_created_at` (composite): simulation history page filter + sort
+  - `ix_test_result_simulation_id`: FK with no PG auto-index; 3× IN-clause queries
+  - `ix_test_result_user_id`: authorization check `filter_by(id=…, user_id=…)`
+- Migration script updated with `_create_indexes()` using `CREATE INDEX CONCURRENTLY IF NOT EXISTS` (no table lock, idempotent)
+
+**Connection pool for 100-user load (`app/config/network_config.py`, `app/__init__.py`):**
+- Worker cap raised from 5 → 9; threads raised from 5 → 6 (16-core prod: 9 × 6 = 54 handlers)
+- `pool_size` 25 → 50, `max_overflow` 25 → 50 (100 max PG connections = PG default `max_connections`)
+- `pool_timeout` 10 s → 20 s for burst headroom
+
+**Security fixes (`app/routes/simulation.py`, `app/routes/admin.py`, `app/utils/subprocess_runner.py`, `app/templates/admin/index.html`):**
+- Added `@research_required` to 8 simulation API routes (lab_engineer was able to call them)
+- Fixed XSS in admin `onclick` handlers via `|tojson` filter
+- Added input validation: non-empty `employee_id`, password minimum 8 chars, HTTP 400/409 status codes
+- Fixed inverted `subprocess_runner` success default (`True` → `False`)
+- Added `db.session.rollback()` in `experiment()` exception handler
+
+**Code quality (`app/services/comparison_service.py`, `app_regression_test.py`):**
+- Removed 5 unused `ComparisonService` methods (`calculate_rmse`, `calculate_correlation`, `interpolate_to_common_timebase`, `compare_pt_curves`, `generate_comparison_chart_data`)
+- Clamped admin `max_rows` to `[1, 10000]`
+- Removed 6 dead test cases for deleted methods
+
+**Backup improvements (`scripts/backup.py`):**
+- Added `--date YYYYMMDD` flag to label backup with a custom date
+- Cron path updated from dev path to `/opt/mgg/MGG_SYS`
+
+**SQLite → PostgreSQL migration (`migrations/sqlite_to_postgresql.py`):**
+- New idempotent migration script: copies all rows, handles boolean cast, resets sequences
+- Successfully migrated 3 users, 11 simulations, 15 test results on 2026-03-12
+
+**Tests (`app_regression_test.py`):**
+- `TestBackupUnit` (19 tests): unit tests for every function in `scripts/backup.py` — SQLite copy, pg_dump args/format/error, uploads/logs archives, pruning, `--date` flag
+- `TestHealthEndpoint` (7 tests): `/health` 200/503 paths, JSON format, no-auth requirement
+- `TestUI` (22 tests): login page structure, auth flow, protected page redirects, admin content, JSON API, log rotation daily filename
+- Rate limiter reset fix: `limiter.reset()` in `TestUI.setUp()` (in-memory counters carried over from `TestRoutes`)
+- Total: **109 tests, all passing** (was 61)
+
+**Documentation:**
+- `NETWORK_DEPLOYMENT.md`: full rewrite as 10-step hardware deployment guide (16-core, 64 GB RAM, 500 GB disk, 10 GbE)
+- `SHIP GUIDE.md`: rewritten as shipment checklist with `- [ ]` checkboxes
+- `database/README.md`: PostgreSQL as primary, SQLite as dev-only
+- `STAGING.md` (new): 8-step staging environment plan with locust load test recipe and backup restore drill
+- `requirements.txt`: added `gunicorn>=22.0.0`; documented `postgresql-client` as system dependency
+
+---
+
 ## [2026-03-09] Schema cleanup: drop legacy tables
 
 ### Changes
