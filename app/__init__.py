@@ -53,9 +53,9 @@ def create_app():
     # and only needs check_same_thread disabled for multi-threaded Gunicorn.
     if db_uri.startswith('postgresql'):
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-            'pool_size': 25,       # Sized to match gunicorn workers × threads (5×5=25)
-            'max_overflow': 25,    # Burst headroom → 50 total max
-            'pool_timeout': 10,    # Fail fast instead of 30s default
+            'pool_size': 50,       # Covers max handlers: 9 workers × 6 threads = 54 (rounds to 50+overflow)
+            'max_overflow': 50,    # Burst headroom → 100 total max (= PostgreSQL default max_connections)
+            'pool_timeout': 20,    # Wait up to 20s for a connection under burst load
             'pool_recycle': 3600,  # Recycle idle connections every hour
             'pool_pre_ping': True, # Discard stale connections before use
         }
