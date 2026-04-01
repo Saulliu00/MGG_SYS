@@ -166,12 +166,20 @@ class WorkOrderService:
             return {'found': False}
         return {
             'found': True,
+            # Test-condition fields → fill 输入参数 form selects
             'ignition_model': sim.ignition_model,
             'shell_model': sim.shell_model,
             'current': sim.current,
             'sensor_model': sim.sensor_model,
             'body_model': sim.body_model,
             'equipment': sim.equipment,
+            # Recipe fields → populate 逆向预测结果 panel
+            'nc_type_1': sim.nc_type_1,
+            'nc_usage_1': sim.nc_usage_1,
+            'nc_type_2': sim.nc_type_2,
+            'nc_usage_2': sim.nc_usage_2,
+            'gp_type': sim.gp_type,
+            'gp_usage': sim.gp_usage,
         }
 
     def delete_test_result(self, test_result_id: int, user_id: int, is_admin: bool = False) -> Dict:

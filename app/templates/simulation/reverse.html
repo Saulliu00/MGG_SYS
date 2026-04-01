@@ -391,13 +391,28 @@
                 _setWoStatus('工单不存在', 'error');
                 return;
             }
-            // Map DB fields → form select names
+            // Map DB fields → form select names (输入参数 column)
             _setSelectValue('shell_height', data.shell_model);
             _setSelectValue('current',      data.current);
             _setSelectValue('sensor_range', data.sensor_model);
             _setSelectValue('volume',       data.body_model);
             _setSelectValue('igniter',      data.ignition_model);
             _setSelectValue('device',       data.equipment);
+
+            // Populate 逆向预测结果 panel with the actual recipe from the work order
+            const _val = (v, unit) => (v != null && v !== '') ? String(v) + (unit || '') : '—';
+            document.getElementById('predicted_nc_type').value   = _val(data.nc_type_1);
+            document.getElementById('predicted_nc_amount').value = _val(data.nc_usage_1);
+            document.getElementById('predicted_gp_type').value   = _val(data.gp_type);
+            document.getElementById('predicted_gp_amount').value = _val(data.gp_usage);
+            document.getElementById('predicted_igniter').value   = _val(data.ignition_model);
+            document.getElementById('confidence_score').textContent = '实际工单配方';
+
+            // Show results panel, hide placeholder
+            document.getElementById('reverseWorkOrderDisplay').style.display = 'none';
+            document.getElementById('reverseResults').style.display           = 'block';
+            document.getElementById('reverseResultsPlaceholder').style.display = 'none';
+
             _setWoStatus(`✓ 已填充工单 ${wo} 的参数`, 'ok');
         } catch (e) {
             console.error('lookupWorkOrderRecipe error:', e);
@@ -405,7 +420,11 @@
         }
     }
 
-    /** Set a <select> by name to the given value (as string). No-op if value not in options. */
+    /**
+     * Set a <select> by name to the given value.
+     * If the value is not already in the dropdown, a new option is appended
+     * dynamically so the stored DB value is always reflected.
+     */
     function _setSelectValue(name, value) {
         if (value == null) return;
         const sel = document.querySelector(`[name="${name}"]`);
@@ -414,7 +433,12 @@
         for (const opt of sel.options) {
             if (opt.value === target) { sel.value = target; return; }
         }
-        // Value not in dropdown options — leave unchanged
+        // Value not in dropdown options — add it so it shows correctly
+        const opt = document.createElement('option');
+        opt.value = target;
+        opt.textContent = target;
+        sel.appendChild(opt);
+        sel.value = target;
     }
 
     function _setWoStatus(html, type) {
