@@ -35,6 +35,21 @@ def list_work_orders():
         return jsonify({'success': False, 'message': '服务器内部错误'}), 500
 
 
+@wp.route('/<work_order>/recipe')
+@login_required
+@research_required
+def work_order_recipe(work_order):
+    """Return recipe fields for a work order — used by 逆向 page to pre-fill inputs."""
+    if not _valid_work_order(work_order):
+        return jsonify({'success': False, 'message': '无效的工单号'}), 400
+    try:
+        data = current_app.work_order_service.get_work_order_recipe(work_order)
+        return jsonify({'success': True, **data})
+    except Exception as e:
+        current_app.logger.error('Error fetching recipe for work order %s: %s', work_order, e, exc_info=True)
+        return jsonify({'success': False, 'message': '服务器内部错误'}), 500
+
+
 @wp.route('/<work_order>/detail')
 @login_required
 @research_required

@@ -140,6 +140,40 @@ class WorkOrderService:
             'statistics': statistics,
         }
 
+    def get_work_order_recipe(self, work_order: str) -> Dict:
+        """
+        Return the recipe fields from the earliest simulation for a given
+        work order.  Used by the 逆向 page to pre-fill input parameters.
+
+        Returns:
+            {
+              'found': bool,
+              'ignition_model': str|None,   # 点火具
+              'shell_model': str|None,       # 管壳高度
+              'current': float|None,         # 通电条件
+              'sensor_model': str|None,      # 传感器量程
+              'body_model': str|None,        # 容积
+              'equipment': str|None,         # 测试设备
+            }
+        """
+        sim = (
+            Simulation.query
+            .filter_by(work_order=work_order)
+            .order_by(Simulation.created_at)
+            .first()
+        )
+        if not sim:
+            return {'found': False}
+        return {
+            'found': True,
+            'ignition_model': sim.ignition_model,
+            'shell_model': sim.shell_model,
+            'current': sim.current,
+            'sensor_model': sim.sensor_model,
+            'body_model': sim.body_model,
+            'equipment': sim.equipment,
+        }
+
     def delete_test_result(self, test_result_id: int, user_id: int, is_admin: bool = False) -> Dict:
         """
         Delete a TestResult. Admin can delete any; others only their own.
