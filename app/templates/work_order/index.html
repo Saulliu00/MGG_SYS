@@ -14,7 +14,18 @@
 
         <!-- Left Panel: Work Order List -->
         <div class="panel parameters-panel" style="display:flex; flex-direction:column; overflow:hidden;">
-            <div class="panel-title">工单查询</div>
+            <div class="panel-title" style="display:flex; align-items:center; justify-content:space-between;">
+                <span>工单查询</span>
+                <select id="woSortSelect"
+                        onchange="sortWorkOrders(this.value)"
+                        title="排序方式"
+                        style="font-size:0.76rem; border:1px solid #dce1e7; border-radius:6px;
+                               padding:0.18rem 0.4rem; color:#2c3e50; background:#fff;
+                               cursor:pointer; outline:none; font-family:inherit;">
+                    <option value="peak_pressure">峰压排序</option>
+                    <option value="peak_time">瞬时峰压</option>
+                </select>
+            </div>
 
             <!-- Search box -->
             <div style="padding:0 0.5rem 0.75rem;">
@@ -62,5 +73,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/work_order.js') }}?v=2026030301"></script>
+<script src="{{ url_for('static', filename='js/work_order.js') }}?v=2026040101"></script>
 {% endblock %}

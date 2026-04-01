@@ -2,6 +2,7 @@
 
 let allWorkOrders = [];      // full list from server
 let selectedWorkOrder = null; // currently selected work_order string
+let currentSort = 'peak_pressure'; // 'default' | 'peak_pressure' | 'peak_time'
 
 // Escape HTML special characters to prevent XSS when inserting user data into innerHTML
 function _escapeHtml(str) {
@@ -36,7 +37,7 @@ async function loadWorkOrders() {
         const data = await resp.json();
         if (data.success) {
             allWorkOrders = data.work_orders;
-            renderWorkOrderList(allWorkOrders);
+            renderWorkOrderList(_applySortToList(allWorkOrders));
         } else {
             _showListError('加载工单列表失败');
         }
@@ -53,7 +54,50 @@ function filterWorkOrders(query) {
             wo.work_order.toLowerCase().includes(q) ||
             wo.recipe_summary.toLowerCase().includes(q))
         : allWorkOrders;
-    renderWorkOrderList(filtered);
+    renderWorkOrderList(_applySortToList(filtered));
+}
+
+// ── Sort ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Apply the current sort key to a list of work order objects.
+ * Returns a new sorted array; does not mutate the input.
+ *
+ * Sort keys:
+ *   'peak_pressure' — descending mean peak pressure (highest first)
+ *   'peak_time'     — ascending mean peak time (earliest arrival first)
+ *   'default'       — server order (created_at desc), no change
+ *
+ * Entries with no test data (null values) always sink to the bottom.
+ */
+function _applySortToList(list) {
+    if (currentSort === 'peak_pressure') {
+        return [...list].sort((a, b) => {
+            const pa = a.mean_peak_pressure ?? -Infinity;
+            const pb = b.mean_peak_pressure ?? -Infinity;
+            return pb - pa; // desc
+        });
+    }
+    if (currentSort === 'peak_time') {
+        return [...list].sort((a, b) => {
+            const ta = a.mean_peak_time ?? Infinity;
+            const tb = b.mean_peak_time ?? Infinity;
+            return ta - tb; // asc — earliest arrival first
+        });
+    }
+    return list; // default: preserve server-side created_at desc order
+}
+
+/** Called by the sort dropdown's onchange handler. */
+function sortWorkOrders(key) {
+    currentSort = key;
+    const q = document.getElementById('woSearchInput').value.trim().toLowerCase();
+    const filtered = q
+        ? allWorkOrders.filter(wo =>
+            wo.work_order.toLowerCase().includes(q) ||
+            wo.recipe_summary.toLowerCase().includes(q))
+        : allWorkOrders;
+    renderWorkOrderList(_applySortToList(filtered));
 }
 
 function renderWorkOrderList(list) {
