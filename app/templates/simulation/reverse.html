@@ -78,6 +78,43 @@
                     </select>
                 </div>
             </form>
+
+            <!-- ── Block 1: Fill inputs from a work order ───────────────── -->
+            <div style="margin-top:1.2rem; padding-top:1rem; border-top:1px solid #e8ecf0;">
+                <h6 style="color:#667eea; font-weight:bold; margin-bottom:0.6rem; font-size:0.83rem;">
+                    <i class="fas fa-search"></i> 按工单填充参数
+                </h6>
+                <div style="display:flex; gap:0.4rem; align-items:center;">
+                    <input id="reverseWoInput" type="text" placeholder="工单号..."
+                           class="form-control"
+                           style="flex:1; padding:0.35rem 0.5rem; font-size:0.85rem;">
+                    <button type="button" onclick="lookupWorkOrderRecipe()"
+                            class="btn btn-outline-primary"
+                            style="padding:0.35rem 0.75rem; font-size:0.82rem; white-space:nowrap;">
+                        确认
+                    </button>
+                </div>
+                <div id="reverseWoStatus"
+                     style="font-size:0.78rem; margin-top:0.35rem; min-height:1.1em;"></div>
+            </div>
+
+            <!-- ── Block 2: Upload PT curve file → auto-predict ─────────── -->
+            <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid #e8ecf0;">
+                <h6 style="color:#667eea; font-weight:bold; margin-bottom:0.6rem; font-size:0.83rem;">
+                    <i class="fas fa-upload"></i> 上传PT曲线文件
+                </h6>
+                <input id="reverseFileInput" type="file" accept=".xlsx,.csv"
+                       class="form-control"
+                       style="font-size:0.82rem; padding:0.3rem 0.4rem;">
+                <button type="button" onclick="uploadAndPredict()"
+                        class="btn btn-outline-success"
+                        style="width:100%; margin-top:0.45rem; padding:0.35rem; font-size:0.82rem;">
+                    确认
+                </button>
+                <div id="reverseFileStatus"
+                     style="font-size:0.78rem; margin-top:0.35rem; min-height:1.1em;"></div>
+            </div>
+
         </div>
 
         <!-- Middle Panel - Pressure Data Input -->
@@ -330,5 +367,133 @@
 
     // Initialise empty chart on load
     window.addEventListener('load', updateReversePlot);
+
+    // ── Block 1: Work order recipe lookup ────────────────────────────────────
+
+    /**
+     * Fetch the recipe for a work order and pre-fill the input form.
+     * Maps DB field names → form <select name="..."> values.
+     */
+    async function lookupWorkOrderRecipe() {
+        const wo = document.getElementById('reverseWoInput').value.trim();
+        const statusEl = document.getElementById('reverseWoStatus');
+        if (!wo) {
+            _setWoStatus('请输入工单号', 'error');
+            return;
+        }
+        _setWoStatus('<i class="fas fa-spinner fa-spin"></i> 查询中...', 'info');
+        try {
+            const resp = await fetch(`/work_order/${encodeURIComponent(wo)}/recipe`, {
+                headers: { 'X-CSRFToken': getCsrfToken() }
+            });
+            const data = await resp.json();
+            if (!data.success || !data.found) {
+                _setWoStatus('工单不存在', 'error');
+                return;
+            }
+            // Map DB fields → form select names
+            _setSelectValue('shell_height', data.shell_model);
+            _setSelectValue('current',      data.current);
+            _setSelectValue('sensor_range', data.sensor_model);
+            _setSelectValue('volume',       data.body_model);
+            _setSelectValue('igniter',      data.ignition_model);
+            _setSelectValue('device',       data.equipment);
+            _setWoStatus(`✓ 已填充工单 ${wo} 的参数`, 'ok');
+        } catch (e) {
+            console.error('lookupWorkOrderRecipe error:', e);
+            _setWoStatus('网络错误，请重试', 'error');
+        }
+    }
+
+    /** Set a <select> by name to the given value (as string). No-op if value not in options. */
+    function _setSelectValue(name, value) {
+        if (value == null) return;
+        const sel = document.querySelector(`[name="${name}"]`);
+        if (!sel) return;
+        const target = String(value);
+        for (const opt of sel.options) {
+            if (opt.value === target) { sel.value = target; return; }
+        }
+        // Value not in dropdown options — leave unchanged
+    }
+
+    function _setWoStatus(html, type) {
+        const el = document.getElementById('reverseWoStatus');
+        const colors = { ok: '#27ae60', error: '#e74c3c', info: '#667eea' };
+        el.style.color = colors[type] || '#7f8c8d';
+        el.innerHTML = html;
+    }
+
+    // ── Block 2: Upload PT curve file and trigger reverse prediction ─────────
+
+    /**
+     * Upload the selected file to /simulation/load_test_data, populate the
+     * pressure table with the parsed time/pressure arrays, then automatically
+     * run the reverse simulation.
+     */
+    async function uploadAndPredict() {
+        const fileInput = document.getElementById('reverseFileInput');
+        const statusEl  = document.getElementById('reverseFileStatus');
+        if (!fileInput.files.length) {
+            _setFileStatus('请先选择文件', 'error');
+            return;
+        }
+        _setFileStatus('<i class="fas fa-spinner fa-spin"></i> 解析文件中...', 'info');
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        try {
+            const resp = await fetch('/simulation/load_test_data', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCsrfToken() },
+                body: formData
+            });
+            const data = await resp.json();
+            if (!data.success || !data.time || !data.pressure) {
+                _setFileStatus('文件解析失败：' + (data.message || '格式不支持'), 'error');
+                return;
+            }
+            populatePressureTable(data.time, data.pressure);
+            updateReversePlot();
+            _setFileStatus(`✓ 已导入 ${data.time.length} 个数据点，正在预测...`, 'ok');
+            runReverseSimulation();
+        } catch (e) {
+            console.error('uploadAndPredict error:', e);
+            _setFileStatus('网络错误，请重试', 'error');
+        }
+    }
+
+    /**
+     * Replace the pressure table body with rows built from the given arrays.
+     * Re-attaches live-update listeners to all new inputs.
+     */
+    function populatePressureTable(times, pressures) {
+        const tbody = document.querySelector('#pressureTable tbody');
+        tbody.innerHTML = times.map((t, i) =>
+            `<tr>
+                <td style="padding:0.2rem 0.4rem; border:1px solid #ddd;">
+                    <input type="number" step="any" class="time-input form-control"
+                           value="${t}"
+                           style="padding:0.25rem 0.4rem; font-size:0.85rem; text-align:center;">
+                </td>
+                <td style="padding:0.2rem 0.4rem; border:1px solid #ddd;">
+                    <input type="number" step="any" class="pressure-input form-control"
+                           value="${pressures[i] ?? ''}"
+                           style="padding:0.25rem 0.4rem; font-size:0.85rem;">
+                </td>
+            </tr>`
+        ).join('');
+        // Re-attach live-plot listeners to the new inputs
+        tbody.querySelectorAll('.time-input, .pressure-input').forEach(inp => {
+            inp.addEventListener('input', updateReversePlot);
+        });
+    }
+
+    function _setFileStatus(html, type) {
+        const el = document.getElementById('reverseFileStatus');
+        const colors = { ok: '#27ae60', error: '#e74c3c', info: '#667eea' };
+        el.style.color = colors[type] || '#7f8c8d';
+        el.innerHTML = html;
+    }
 </script>
 {% endblock %}
