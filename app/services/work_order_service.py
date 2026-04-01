@@ -2,7 +2,7 @@
 import json
 import os
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from app.models import Simulation, TestResult
 from app.services.comparison_service import ComparisonService
@@ -19,9 +19,12 @@ class WorkOrderService:
         """
         Return one entry per unique work_order string, newest first.
         The earliest simulation for each work_order is treated as the owner.
+        Each entry also includes mean_peak_pressure and mean_peak_time so
+        the frontend can sort client-side without extra round trips.
 
         Returns:
-            List of dicts: {work_order, simulation_id, owner_id, recipe_summary, created_at}
+            List of dicts: {work_order, simulation_id, owner_id, recipe_summary,
+                            created_at, mean_peak_pressure, mean_peak_time}
         """
         sims = (
             Simulation.query
@@ -30,13 +33,35 @@ class WorkOrderService:
             .order_by(Simulation.created_at)  # oldest first so first-seen = owner
             .all()
         )
+        if not sims:
+            return []
+
         # Deduplicate: one entry per unique work_order; earliest sim is the owner
         seen: Dict[str, Simulation] = {}
         for s in sims:
             if s.work_order not in seen:
                 seen[s.work_order] = s
 
-        # Sort descending by created_at for display
+        # Build work_order → [sim_ids] mapping (all sims, not just the owner)
+        sim_id_to_wo: Dict[int, str] = {s.id: s.work_order for s in sims}
+        wo_datasets: Dict[str, List] = {wo: [] for wo in seen}
+
+        # Batch-load all test results in one query and group by work_order
+        all_sim_ids = [s.id for s in sims]
+        test_results = TestResult.query.filter(
+            TestResult.simulation_id.in_(all_sim_ids)
+        ).all()
+        for tr in test_results:
+            wo = sim_id_to_wo.get(tr.simulation_id)
+            if wo and tr.data:
+                try:
+                    d = json.loads(tr.data)
+                    if d.get('time') and d.get('pressure'):
+                        wo_datasets[wo].append(d)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        # Sort descending by created_at for default display order
         unique_sims = sorted(seen.values(), key=lambda x: x.created_at, reverse=True)
         return [
             {
@@ -45,6 +70,7 @@ class WorkOrderService:
                 'owner_id': s.user_id,
                 'recipe_summary': WorkOrderService._recipe_summary(s),
                 'created_at': s.created_at.strftime('%Y-%m-%d %H:%M') if s.created_at else '',
+                **WorkOrderService._compute_peak_summary(wo_datasets[s.work_order]),
             }
             for s in unique_sims
         ]
@@ -220,6 +246,30 @@ class WorkOrderService:
             'mean_t': round(mean_t, 3),
             'std_t': round(std_t, 3),
             'cv_t': round(cv_t, 2),
+        }
+
+    @staticmethod
+    def _compute_peak_summary(datasets: List[Dict]) -> Dict:
+        """
+        Return mean_peak_pressure (MPa) and mean_peak_time (ms) across all
+        datasets for one work order.  Both values are None when there is no
+        test data.
+
+        Returns:
+            {'mean_peak_pressure': float|None, 'mean_peak_time': float|None}
+        """
+        if not datasets:
+            return {'mean_peak_pressure': None, 'mean_peak_time': None}
+        pressures, times = [], []
+        for d in datasets:
+            peak_p, peak_t = ComparisonService.find_peak_pressure(
+                d['pressure'], d['time']
+            )
+            pressures.append(peak_p)
+            times.append(peak_t)
+        return {
+            'mean_peak_pressure': round(float(np.mean(pressures)), 3),
+            'mean_peak_time': round(float(np.mean(times)), 3),
         }
 
     @staticmethod
