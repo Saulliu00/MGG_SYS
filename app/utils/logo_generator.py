@@ -54,7 +54,7 @@ class LogoGenerator:
             # Try to load a system font
             font_size = int(circle_radius * 0.8)
             font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', font_size)
-        except:
+        except Exception:
             # Fallback to default font
             font = ImageFont.load_default()
 
@@ -79,7 +79,7 @@ class LogoGenerator:
         try:
             subtitle_font_size = int(font_size * 0.25)
             subtitle_font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', subtitle_font_size)
-        except:
+        except Exception:
             subtitle_font = ImageFont.load_default()
 
         subtitle = "仿真系统"

@@ -76,20 +76,6 @@ def _run_sqlite_migrations(app):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # Migration 1: Add email to user table (if doesn't exist)
-        cursor.execute("PRAGMA table_info(user)")
-        user_cols = [col[1] for col in cursor.fetchall()]
-        
-        if 'email' not in user_cols:
-            cursor.execute('ALTER TABLE "user" ADD COLUMN email VARCHAR(120)')
-            conn.commit()
-            app.logger.info('✓ Migration: Added email to user table')
-        
-        if 'department' not in user_cols:
-            cursor.execute('ALTER TABLE "user" ADD COLUMN department VARCHAR(50)')
-            conn.commit()
-            app.logger.info('✓ Migration: Added department to user table')
-        
         # Migration 2: Add recipe_name to recipe table
         cursor.execute("PRAGMA table_info(recipe)")
         recipe_cols = [col[1] for col in cursor.fetchall()]
@@ -156,9 +142,7 @@ def _seed_admin(app):
         admin_user = User(
             username='Administrator',
             employee_id='admin',
-            email='admin@example.com',
             role='admin',
-            department='IT'
         )
         admin_user.set_password(admin_password)
         db.session.add(admin_user)

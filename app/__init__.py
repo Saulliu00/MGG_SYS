@@ -8,7 +8,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask_login import current_user
 from app.config.network_config import (
     CORS_CONFIG,
@@ -73,7 +73,7 @@ def create_app():
     app.config['SESSION_COOKIE_SECURE'] = SESSION_CONFIG['session_cookie_secure']
     app.config['SESSION_COOKIE_HTTPONLY'] = SESSION_CONFIG['session_cookie_httponly']
     app.config['SESSION_COOKIE_SAMESITE'] = SESSION_CONFIG['session_cookie_samesite']
-    app.config['PERMANENT_SESSION_LIFETIME'] = SESSION_CONFIG['permanent_session_lifetime']
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=SESSION_CONFIG['permanent_session_lifetime'])
 
     # Request timeouts and network logging
     app.config['TIMEOUTS'] = TIMEOUTS
@@ -143,6 +143,13 @@ def create_app():
     # Create database tables and seed default admin
     with app.app_context():
         db.create_all()
+
+        # Enable WAL mode for SQLite (better crash recovery + concurrency under Gunicorn)
+        if db_uri.startswith('sqlite'):
+            from sqlalchemy import text
+            db.session.execute(text('PRAGMA journal_mode=WAL'))
+            db.session.execute(text('PRAGMA synchronous=NORMAL'))  # Safe with WAL; faster than FULL
+            db.session.commit()
 
         # Create default admin user if not exists
         from app.models import User

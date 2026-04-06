@@ -22,7 +22,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def migrate(db_path='instance/mgg_sys.db'):
+def migrate(db_path='instance/simulation_system.db'):
     """Apply the unique constraint migration"""
     
     print(f"Starting migration on database: {db_path}")

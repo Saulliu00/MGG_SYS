@@ -30,13 +30,6 @@ def index():
     users = User.query.all()
     return render_template('admin/index.html', users=users)
 
-@bp.route('/users')
-@login_required
-@admin_required
-def users():
-    users = User.query.all()
-    return render_template('admin/users.html', users=users)
-
 @bp.route('/user/add', methods=['POST'])
 @login_required
 @admin_required

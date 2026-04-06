@@ -2,7 +2,7 @@
 
 **Gas Generator Simulation and Analysis Platform**
 **Branch:** `db-optimized`
-**Last Updated:** 2026-03-06
+**Last Updated:** 2026-04-06
 
 ---
 
@@ -111,7 +111,7 @@ export ADMIN_PASSWORD=<secure-password>
 gunicorn -c gunicorn.conf.py "app:create_app()"
 ```
 
-Gunicorn starts 5 workers × 5 threads each (25 concurrent handlers), bound to `0.0.0.0:5001`.
+Gunicorn starts `min(cpu_count+1, 9)` workers × 6 threads each (up to 54 concurrent handlers on a ≥8-core server, 30 on a 4-core Pi), bound to `0.0.0.0:5001`.
 
 ---
 
@@ -311,8 +311,8 @@ Validation rules enforced at upload:
 | `CORS_ORIGINS` | `*` | Allowed CORS origins |
 
 ### Connection Pool (production)
-Configured in `app/config/network_config.py`:
-- `pool_size=25`, `max_overflow=25`, `pool_timeout=10s`, `pool_recycle=3600s`
+Configured in `app/__init__.py` (PostgreSQL only):
+- `pool_size=50`, `max_overflow=50`, `pool_timeout=20s`, `pool_recycle=3600s`, `pool_pre_ping=True`
 
 ---
 
@@ -348,7 +348,7 @@ Covers: ComparisonService, Plotter, WorkOrderService (including delete permissio
 ```bash
 python database/database_regression_test.py
 ```
-Covers: all 3 ORM models, relationships, constraints, WAL mode, backup, `reset_database()`, and seeded data integrity.
+Covers: ORM models, relationships, constraints, WAL mode, backup, and `reset_database()` — using the extended schema in `database/models.py` (the migration target), not the live `app/models.py` schema.
 
 ### Load test (requires running server)
 ```bash

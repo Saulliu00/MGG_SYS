@@ -6,7 +6,7 @@ from datetime import datetime
 @login_manager.user_loader
 def load_user(user_id):
     try:
-        user = User.query.get(int(user_id))
+        user = db.session.get(User, int(user_id))
         if user is None:
             return None
         # Kick support: admin clears session_token in DB → force logout

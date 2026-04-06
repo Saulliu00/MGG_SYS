@@ -2,7 +2,7 @@
 import os
 
 # File handling constants
-ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
+ALLOWED_EXTENSIONS = {'xlsx'}
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
 UPLOAD_FOLDER = 'app/static/uploads'
 

@@ -102,7 +102,12 @@ def upload_test_result():
         file = request.files['file']
         simulation_id = request.form.get('simulation_id')
         work_order = request.form.get('work_order')
-        
+
+        # Capture file size before stream is consumed by process_test_result_upload
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+
         # Capture recipe parameters from current form state (if available)
         recipe_params = {
             'ignition_model': request.form.get('ignition_model'),
@@ -128,12 +133,9 @@ def upload_test_result():
             username=current_user.username,
             user_id=current_user.id,
             filename=file.filename,
-            file_size=len(file.read()) if hasattr(file, 'read') else 0,
+            file_size=file_size,
             success=True
         )
-        # Reset file pointer after reading size
-        if hasattr(file, 'seek'):
-            file.seek(0)
 
         return jsonify(result)
 
