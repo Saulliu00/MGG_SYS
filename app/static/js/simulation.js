@@ -40,6 +40,7 @@ let simulationData = null;       // {time: [...], pressure: [...]}
 let simulationPlotData = null;   // Complete Plotly figure from backend
 let testData = null;             // {time: [...], pressure: [...]}
 let simulationId = null;         // ID of the last simulation run
+let lastStatistics = null;       // Statistics from most recent simulation
 
 // Run simulation
 async function runSimulation() {
@@ -69,8 +70,15 @@ async function runSimulation() {
                 simulationData = { time, pressure };
             }
 
+            // Store statistics for xlsx export
+            lastStatistics = result.data.statistics;
+
             // Update statistics display
             updateSimulationInfo(result.data.statistics);
+
+            // Enable the download button
+            const dlBtn = document.getElementById('downloadXlsxBtn');
+            if (dlBtn) { dlBtn.disabled = false; dlBtn.style.opacity = '1'; }
 
             // Render the simulation chart
             plotSimulationChart();
@@ -444,6 +452,44 @@ async function plotComparisonChart() {
         console.error('Error:', error);
         // Show placeholder if error
         initializeChart('comparisonChart', 'comparison');
+    }
+}
+
+// Download current simulation P-T curve as .xlsx
+async function downloadSimulationXlsx() {
+    if (!simulationData) return;
+    const btn = document.getElementById('downloadXlsxBtn');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 生成中...';
+    try {
+        const resp = await fetch('/simulation/export_xlsx', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+            body: JSON.stringify({
+                time: simulationData.time,
+                pressure: simulationData.pressure,
+                statistics: lastStatistics || {}
+            })
+        });
+        if (!resp.ok) { throw new Error('服务器返回错误'); }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const nc = lastStatistics && lastStatistics.nc_usage_1 != null
+            ? `_NC1_${lastStatistics.nc_usage_1}mg` : '';
+        a.download = `PT曲线${nc}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error('Download error:', err);
+        alert('下载失败，请稍后重试');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
     }
 }
 

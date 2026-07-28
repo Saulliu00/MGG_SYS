@@ -4,13 +4,15 @@
 
 {% block content %}
 <div class="main-container">
-    <div class="simulation-container" style="grid-template-columns: 1fr 1.5fr 1.5fr;">
-        <!-- Left Panel - Input Parameters -->
+    <div class="simulation-container" style="grid-template-columns: 1fr 2fr;">
+
+        <!-- ══ Left Panel — Input Parameters ══════════════════════════════════ -->
         <div class="panel parameters-panel">
             <div class="panel-title">输入参数</div>
 
             <form id="reverseSimulationForm">
-                <h6 style="color: #667eea; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #667eea; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                <h6 style="color:#667eea; font-weight:bold; margin-bottom:0.65rem;
+                            border-bottom:2px solid #667eea; padding-bottom:0.35rem; font-size:0.85rem;">
                     <i class="fas fa-star"></i> 必填参数
                 </h6>
 
@@ -18,9 +20,13 @@
                     <label>管壳高度:</label>
                     <select name="shell_height" class="form-control" required>
                         <option value="">请选择...</option>
+                        <option value="17.8">17.8</option>
                         <option value="18">18</option>
-                        <option value="19">19</option>
-                        <option value="20">20</option>
+                        <option value="18.3">18.3</option>
+                        <option value="22">22</option>
+                        <option value="24">24</option>
+                        <option value="31.4">31.4</option>
+                        <option value="34">34</option>
                     </select>
                 </div>
 
@@ -29,8 +35,7 @@
                     <select name="current" class="form-control" required>
                         <option value="">请选择...</option>
                         <option value="1.2">1.2</option>
-                        <option value="1.5">1.5</option>
-                        <option value="2.0">2.0</option>
+                        <option value="1.75">1.75</option>
                     </select>
                 </div>
 
@@ -39,8 +44,10 @@
                     <select name="sensor_range" class="form-control" required>
                         <option value="">请选择...</option>
                         <option value="30">30</option>
-                        <option value="31">31</option>
-                        <option value="32">32</option>
+                        <option value="60">60</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="300">300</option>
                     </select>
                 </div>
 
@@ -49,12 +56,16 @@
                     <select name="volume" class="form-control" required>
                         <option value="">请选择...</option>
                         <option value="3.5">3.5</option>
-                        <option value="4.0">4.0</option>
-                        <option value="4.5">4.5</option>
+                        <option value="6">6</option>
+                        <option value="8-1082">8-1082</option>
+                        <option value="10-892">10-892</option>
+                        <option value="10-1027">10-1027</option>
+                        <option value="27">27</option>
                     </select>
                 </div>
 
-                <h6 style="color: #95a5a6; font-weight: bold; margin-top: 1rem; margin-bottom: 0.65rem; border-bottom: 2px solid #95a5a6; padding-bottom: 0.35rem; font-size: 0.85rem;">
+                <h6 style="color:#95a5a6; font-weight:bold; margin-top:1rem; margin-bottom:0.65rem;
+                            border-bottom:2px solid #95a5a6; padding-bottom:0.35rem; font-size:0.85rem;">
                     <i class="fas fa-circle"></i> 可选参数
                 </h6>
 
@@ -62,9 +73,11 @@
                     <label>点火具:</label>
                     <select name="igniter" class="form-control">
                         <option value="">无</option>
+                        <option value="60">60</option>
+                        <option value="85">85</option>
                         <option value="115">115</option>
-                        <option value="116">116</option>
-                        <option value="117">117</option>
+                        <option value="135">135</option>
+                        <option value="235">235</option>
                     </select>
                 </div>
 
@@ -72,14 +85,15 @@
                     <label>测试设备:</label>
                     <select name="device" class="form-control">
                         <option value="">无</option>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
+                        <option value="Y-M">Y-M</option>
+                        <option value="Y-H">Y-H</option>
+                        <option value="J-H1_1">J-H1_1</option>
+                        <option value="J-H2_2">J-H2_2</option>
                     </select>
                 </div>
             </form>
 
-            <!-- ── Block 1: Fill inputs from a work order ───────────────── -->
+            <!-- Block 1: Fill from work order -->
             <div style="margin-top:1.2rem; padding-top:1rem; border-top:1px solid #e8ecf0;">
                 <h6 style="color:#667eea; font-weight:bold; margin-bottom:0.6rem; font-size:0.83rem;">
                     <i class="fas fa-search"></i> 按工单填充参数
@@ -98,7 +112,7 @@
                      style="font-size:0.78rem; margin-top:0.35rem; min-height:1.1em;"></div>
             </div>
 
-            <!-- ── Block 2: Upload PT curve file → auto-predict ─────────── -->
+            <!-- Block 2: Upload PT curve file -->
             <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid #e8ecf0;">
                 <h6 style="color:#667eea; font-weight:bold; margin-bottom:0.6rem; font-size:0.83rem;">
                     <i class="fas fa-upload"></i> 上传PT曲线文件
@@ -106,7 +120,7 @@
                 <input id="reverseFileInput" type="file" accept=".xlsx,.csv"
                        class="form-control"
                        style="font-size:0.82rem; padding:0.3rem 0.4rem;">
-                <button type="button" onclick="uploadAndPredict()"
+                <button type="button" onclick="loadUploadedFile()"
                         class="btn btn-outline-success"
                         style="width:100%; margin-top:0.45rem; padding:0.35rem; font-size:0.82rem;">
                     确认
@@ -114,410 +128,302 @@
                 <div id="reverseFileStatus"
                      style="font-size:0.78rem; margin-top:0.35rem; min-height:1.1em;"></div>
             </div>
-
         </div>
 
-        <!-- Middle Panel - Pressure Data Input -->
-        <div class="panel test-info-panel">
-            <div class="panel-title">压力数据上传</div>
+        <!-- ══ Right Panel — PT曲线 + 逆向预测结果 ═════════════════════════════ -->
+        <div class="panel results-panel" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="panel-title" style="flex-shrink:0;">逆向预测结果</div>
 
-            <!-- Input table -->
-            <table id="pressureTable" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-                <thead>
-                    <tr style="background: #667eea; color: white;">
-                        <th style="padding: 0.4rem 0.6rem; border: 1px solid #5a6fd6; text-align: center;">时间(ms)</th>
-                        <th style="padding: 0.4rem 0.6rem; border: 1px solid #5a6fd6; text-align: center;">压力(MPa)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for t in [0.5, 1, 2, 3, 4, 7, 10, 15, 20, 25, 31, 38] %}
-                    <tr>
-                        <td style="padding: 0.2rem 0.4rem; border: 1px solid #ddd;">
-                            <input type="number" step="any" class="time-input form-control"
-                                   value="{{ t }}"
-                                   style="padding: 0.25rem 0.4rem; font-size: 0.85rem; text-align: center;">
-                        </td>
-                        <td style="padding: 0.2rem 0.4rem; border: 1px solid #ddd;">
-                            <input type="number" step="any" class="pressure-input form-control"
-                                   style="padding: 0.25rem 0.4rem; font-size: 0.85rem;"
-                                   placeholder="0.0">
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            <!-- Live Plotly chart -->
-            <div id="reversePressureChart" style="margin-top: 0.75rem; height: 220px;"></div>
-        </div>
-
-        <!-- Right Panel - Results -->
-        <div class="panel results-panel" style="overflow-y: auto !important;">
-            <div class="panel-title">逆向预测结果</div>
-
-            <div style="text-align: center; margin-bottom: 1rem;">
-                <button type="button" class="btn btn-primary" style="width: 80%; padding: 0.65rem; font-size: 0.95rem;" onclick="runReverseSimulation()">
-                    <i class="fas fa-play"></i> 仿真
-                </button>
+            <!-- Uploaded PT curve chart — large, always visible -->
+            <div style="flex:0 0 42%; min-height:220px; border-bottom:1px solid #e8ecf0;
+                        display:flex; flex-direction:column; padding:0 0.25rem 0.5rem;">
+                <div style="font-size:0.78rem; color:#7f8c8d; margin-bottom:0.25rem; font-weight:600;">
+                    <i class="fas fa-chart-area" style="color:#667eea;"></i> 上传PT曲线预览
+                </div>
+                <div id="reversePtChart" style="flex:1; min-height:0;"></div>
             </div>
 
-            <div id="reverseResults" style="display: none;">
-                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.65rem;">
-                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #667eea; padding-bottom: 0.35rem; font-size: 0.85rem;">
-                        <i class="fas fa-flask"></i> NC配方预测
-                    </h6>
-                    <div class="form-group">
-                        <label>NC类型:</label>
-                        <input type="text" id="predicted_nc_type" class="form-control" readonly style="background: white; font-weight: bold; color: #667eea;">
-                    </div>
-                    <div class="form-group">
-                        <label>NC用量 (毫克):</label>
-                        <input type="text" id="predicted_nc_amount" class="form-control" readonly style="background: white; font-weight: bold; color: #667eea;">
-                    </div>
-                </div>
+            <!-- Prediction results — scrollable -->
+            <div style="flex:1; overflow-y:auto; padding:0.5rem 0.25rem;">
 
-                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.65rem;">
-                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #27ae60; padding-bottom: 0.35rem; font-size: 0.85rem;">
-                        <i class="fas fa-vial"></i> GP配方预测
-                    </h6>
-                    <div class="form-group">
-                        <label>GP类型:</label>
-                        <input type="text" id="predicted_gp_type" class="form-control" readonly style="background: white; font-weight: bold; color: #27ae60;">
-                    </div>
-                    <div class="form-group">
-                        <label>GP用量 (毫克):</label>
-                        <input type="text" id="predicted_gp_amount" class="form-control" readonly style="background: white; font-weight: bold; color: #27ae60;">
-                    </div>
-                </div>
-
-                <div style="background: #f8f9fa; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.65rem;">
-                    <h6 style="color: #2c3e50; font-weight: bold; margin-bottom: 0.65rem; border-bottom: 2px solid #e67e22; padding-bottom: 0.35rem; font-size: 0.85rem;">
-                        <i class="fas fa-fire"></i> 其他
-                    </h6>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label>点火具建议:</label>
-                        <input type="text" id="predicted_igniter" class="form-control" readonly style="background: white; font-weight: bold; color: #e67e22;">
-                    </div>
-                </div>
-
-                <div style="margin-top: 0.75rem; padding: 0.65rem; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #27ae60;">
-                    <p style="margin: 0; font-size: 0.82rem; color: #2c3e50;">
-                        <i class="fas fa-check-circle" style="color: #27ae60;"></i>
-                        <strong>置信度：</strong><span id="confidence_score">--</span>
-                    </p>
-                </div>
-
-                <div style="margin-top: 0.75rem; text-align: center;">
-                    <button type="button" class="btn btn-primary" style="width: 80%; padding: 0.55rem;" onclick="generateReverseWorkOrder()">
-                        <i class="fas fa-file-alt"></i> 生成工单
+                <div style="text-align:center; margin-bottom:0.75rem; margin-top:0.4rem;">
+                    <button type="button" class="btn btn-primary"
+                            style="width:80%; padding:0.65rem; font-size:0.95rem;"
+                            onclick="runReverseSimulation()">
+                        <i class="fas fa-play"></i> 仿真
                     </button>
-                    <div id="reverseWorkOrderDisplay" style="display: none; margin-top: 0.75rem; background: #f0f3ff; border-radius: 6px; padding: 0.65rem; text-align: left; font-size: 0.8rem; border-left: 4px solid #667eea;">
-                        <div style="font-weight: bold; color: #667eea; margin-bottom: 0.4rem;">
-                            <i class="fas fa-file-alt"></i> 工单号: <span id="reverseWorkOrderNumber"></span>
+                </div>
+
+                <div id="reverseResults" style="display:none;">
+                    <div style="background:#f8f9fa; padding:0.75rem; border-radius:6px; margin-bottom:0.65rem;">
+                        <h6 style="color:#2c3e50; font-weight:bold; margin-bottom:0.65rem;
+                                    border-bottom:2px solid #667eea; padding-bottom:0.35rem; font-size:0.85rem;">
+                            <i class="fas fa-flask"></i> NC配方预测
+                        </h6>
+                        <div class="form-group">
+                            <label>NC类型:</label>
+                            <input type="text" id="predicted_nc_type" class="form-control" readonly
+                                   style="background:white; font-weight:bold; color:#667eea;">
                         </div>
-                        <div id="reverseWorkOrderParams" style="color: #2c3e50; line-height: 1.7;"></div>
+                        <div class="form-group">
+                            <label>NC用量 (毫克):</label>
+                            <input type="text" id="predicted_nc_amount" class="form-control" readonly
+                                   style="background:white; font-weight:bold; color:#667eea;">
+                        </div>
+                    </div>
+
+                    <div style="background:#f8f9fa; padding:0.75rem; border-radius:6px; margin-bottom:0.65rem;">
+                        <h6 style="color:#2c3e50; font-weight:bold; margin-bottom:0.65rem;
+                                    border-bottom:2px solid #27ae60; padding-bottom:0.35rem; font-size:0.85rem;">
+                            <i class="fas fa-vial"></i> GP配方预测
+                        </h6>
+                        <div class="form-group">
+                            <label>GP类型:</label>
+                            <input type="text" id="predicted_gp_type" class="form-control" readonly
+                                   style="background:white; font-weight:bold; color:#27ae60;">
+                        </div>
+                        <div class="form-group">
+                            <label>GP用量 (毫克):</label>
+                            <input type="text" id="predicted_gp_amount" class="form-control" readonly
+                                   style="background:white; font-weight:bold; color:#27ae60;">
+                        </div>
+                    </div>
+
+                    <div style="background:#f8f9fa; padding:0.75rem; border-radius:6px; margin-bottom:0.65rem;">
+                        <h6 style="color:#2c3e50; font-weight:bold; margin-bottom:0.65rem;
+                                    border-bottom:2px solid #e67e22; padding-bottom:0.35rem; font-size:0.85rem;">
+                            <i class="fas fa-fire"></i> 其他
+                        </h6>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>点火具建议:</label>
+                            <input type="text" id="predicted_igniter" class="form-control" readonly
+                                   style="background:white; font-weight:bold; color:#e67e22;">
+                        </div>
+                    </div>
+
+                    <div style="margin-top:0.75rem; padding:0.65rem; background:#e8f5e9;
+                                border-radius:6px; border-left:4px solid #27ae60;">
+                        <p style="margin:0; font-size:0.82rem; color:#2c3e50;">
+                            <i class="fas fa-check-circle" style="color:#27ae60;"></i>
+                            <strong>置信度：</strong><span id="confidence_score">--</span>
+                        </p>
+                    </div>
+
+                    <div style="margin-top:0.75rem; text-align:center;">
+                        <button type="button" class="btn btn-primary"
+                                style="width:80%; padding:0.55rem;"
+                                onclick="generateReverseWorkOrder()">
+                            <i class="fas fa-file-alt"></i> 生成工单
+                        </button>
+                        <div id="reverseWorkOrderDisplay"
+                             style="display:none; margin-top:0.75rem; background:#f0f3ff;
+                                    border-radius:6px; padding:0.65rem; text-align:left;
+                                    font-size:0.8rem; border-left:4px solid #667eea;">
+                            <div style="font-weight:bold; color:#667eea; margin-bottom:0.4rem;">
+                                <i class="fas fa-file-alt"></i> 工单号: <span id="reverseWorkOrderNumber"></span>
+                            </div>
+                            <div id="reverseWorkOrderParams" style="color:#2c3e50; line-height:1.7;"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div id="reverseResultsPlaceholder" style="text-align: center; padding: 2rem 0.75rem; color: #95a5a6;">
-                <i class="fas fa-arrow-up" style="font-size: 2rem; margin-bottom: 0.65rem;"></i>
-                <p style="font-size: 0.85rem; margin-bottom: 0.25rem;">上传压力数据并点击"仿真"按钮</p>
-                <p style="font-size: 0.82rem;">系统将预测所需的配方参数</p>
-            </div>
-        </div>
+                <div id="reverseResultsPlaceholder"
+                     style="text-align:center; padding:2rem 0.75rem; color:#95a5a6;">
+                    <i class="fas fa-arrow-up" style="font-size:2rem; margin-bottom:0.65rem;"></i>
+                    <p style="font-size:0.85rem; margin-bottom:0.25rem;">上传PT曲线文件后点击"仿真"</p>
+                    <p style="font-size:0.82rem;">系统将预测所需的配方参数</p>
+                </div>
+            </div><!-- end scrollable results -->
+
+        </div><!-- end right panel -->
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // ── Live PT chart ─────────────────────────────────────────────────────────
+// ── Shared state ──────────────────────────────────────────────────────────────
+let uploadedPtCurve = null;   // {time: [...], pressure: [...]} from file upload
 
-    function getTableData() {
-        const times = [];
-        const pressures = [];
-        document.querySelectorAll('#pressureTable tbody tr').forEach(row => {
-            const t = parseFloat(row.querySelector('.time-input').value);
-            const p = parseFloat(row.querySelector('.pressure-input').value);
-            if (!isNaN(t) && !isNaN(p)) {
-                times.push(t);
-                pressures.push(p);
-            }
+// ── Block 1: Fill inputs from a work order ────────────────────────────────────
+async function lookupWorkOrderRecipe() {
+    const wo = document.getElementById('reverseWoInput').value.trim();
+    if (!wo) { _setWoStatus('请输入工单号', 'error'); return; }
+    _setWoStatus('<i class="fas fa-spinner fa-spin"></i> 查询中...', 'info');
+    try {
+        const resp = await fetch(`/work_order/${encodeURIComponent(wo)}/recipe`,
+            { headers: { 'X-CSRFToken': getCsrfToken() } });
+        const data = await resp.json();
+        if (!data.success || !data.found) { _setWoStatus('工单不存在', 'error'); return; }
+        _setSelectValue('shell_height', data.shell_model);
+        _setSelectValue('current',      data.current);
+        _setSelectValue('sensor_range', data.sensor_model);
+        _setSelectValue('volume',       data.body_model);
+        _setSelectValue('igniter',      data.ignition_model);
+        _setSelectValue('device',       data.equipment);
+
+        const _v = v => (v != null && v !== '') ? String(v) : '—';
+        document.getElementById('predicted_nc_type').value   = _v(data.nc_type_1);
+        document.getElementById('predicted_nc_amount').value = _v(data.nc_usage_1);
+        document.getElementById('predicted_gp_type').value   = _v(data.gp_type);
+        document.getElementById('predicted_gp_amount').value = _v(data.gp_usage);
+        document.getElementById('predicted_igniter').value   = _v(data.ignition_model);
+        document.getElementById('confidence_score').textContent = '实际工单配方';
+        document.getElementById('reverseWorkOrderDisplay').style.display = 'none';
+        document.getElementById('reverseResults').style.display = 'block';
+        document.getElementById('reverseResultsPlaceholder').style.display = 'none';
+        _setWoStatus(`✓ 已填充工单 ${wo} 的参数`, 'ok');
+    } catch (e) {
+        console.error(e);
+        _setWoStatus('网络错误，请重试', 'error');
+    }
+}
+
+function _setSelectValue(name, value) {
+    if (value == null) return;
+    const sel = document.querySelector(`[name="${name}"]`);
+    if (!sel) return;
+    const target = String(value);
+    for (const opt of sel.options) {
+        if (opt.value === target) { sel.value = target; return; }
+    }
+    const opt = document.createElement('option');
+    opt.value = target; opt.textContent = target;
+    sel.appendChild(opt); sel.value = target;
+}
+
+function _setWoStatus(html, type) {
+    const el = document.getElementById('reverseWoStatus');
+    el.style.color = { ok: '#27ae60', error: '#e74c3c', info: '#667eea' }[type] || '#7f8c8d';
+    el.innerHTML = html;
+}
+
+// ── Block 2: Load uploaded PT curve file ──────────────────────────────────────
+async function loadUploadedFile() {
+    const fi = document.getElementById('reverseFileInput');
+    if (!fi.files.length) { _setFileStatus('请先选择文件', 'error'); return; }
+    _setFileStatus('<i class="fas fa-spinner fa-spin"></i> 解析中...', 'info');
+    const fd = new FormData();
+    fd.append('file', fi.files[0]);
+    try {
+        const resp = await fetch('/simulation/load_test_data', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrfToken() },
+            body: fd
         });
-        return { time: times, pressure: pressures };
-    }
-
-    function updateReversePlot() {
-        const data = getTableData();
-        const chartDiv = document.getElementById('reversePressureChart');
-        const layout = {
-            xaxis: { title: '时间 (ms)', gridcolor: '#e0e0e0' },
-            yaxis: { title: '压力 (MPa)', gridcolor: '#e0e0e0' },
-            hovermode: 'x unified',
-            template: 'plotly_white',
-            showlegend: false,
-            margin: { l: 55, r: 20, t: 15, b: 45 }
-        };
-        if (data.time.length === 0) {
-            Plotly.newPlot(chartDiv, [], layout, { responsive: true });
+        const data = await resp.json();
+        if (!data.success || !data.time || !data.pressure) {
+            _setFileStatus('解析失败：' + (data.message || '格式不支持'), 'error');
             return;
         }
-        Plotly.newPlot(chartDiv, [{
-            x: data.time,
-            y: data.pressure,
-            mode: 'lines+markers',
-            line: { color: '#667eea', width: 2 },
-            marker: { size: 5, color: '#667eea' }
-        }], layout, { responsive: true });
+        uploadedPtCurve = { time: data.time, pressure: data.pressure };
+        _setFileStatus(`✓ 已导入 ${data.time.length} 个数据点`, 'ok');
+        renderPtChart(data.time, data.pressure);
+    } catch (e) {
+        console.error(e);
+        _setFileStatus('网络错误，请重试', 'error');
     }
+}
 
-    // Attach live-update listener to every time and pressure input
-    document.querySelectorAll('.time-input, .pressure-input').forEach(input => {
-        input.addEventListener('input', updateReversePlot);
-    });
+// ── PT chart rendering ────────────────────────────────────────────────────────
+function renderPtChart(time, pressure) {
+    Plotly.newPlot('reversePtChart', [{
+        x: time,
+        y: pressure,
+        mode: 'lines',
+        line: { color: '#667eea', width: 2.5 },
+        name: '上传曲线',
+        fill: 'tozeroy',
+        fillcolor: 'rgba(102,126,234,0.08)'
+    }], {
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 55, r: 20, t: 10, b: 45 },
+        xaxis: { title: '时间 (ms)', gridcolor: '#e8ecf0', zeroline: false },
+        yaxis: { title: '压力 (MPa)', gridcolor: '#e8ecf0', zeroline: false },
+        hovermode: 'x unified',
+        showlegend: false
+    }, { responsive: true });
+}
 
-    // ── Reverse simulation ────────────────────────────────────────────────────
+function _initPtChart() {
+    Plotly.newPlot('reversePtChart', [], {
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 55, r: 20, t: 10, b: 45 },
+        xaxis: { title: '时间 (ms)', gridcolor: '#e8ecf0' },
+        yaxis: { title: '压力 (MPa)', gridcolor: '#e8ecf0' },
+        annotations: [{
+            text: '上传PT曲线文件后显示图表',
+            xref: 'paper', yref: 'paper', x: 0.5, y: 0.5,
+            showarrow: false, font: { size: 13, color: '#bdc3c7' }
+        }]
+    }, { responsive: true });
+}
 
-    function runReverseSimulation() {
-        const data = getTableData();
-        if (data.time.length === 0) {
-            alert('请先在表格中输入压力数据');
-            return;
-        }
+function _setFileStatus(html, type) {
+    const el = document.getElementById('reverseFileStatus');
+    el.style.color = { ok: '#27ae60', error: '#e74c3c', info: '#667eea' }[type] || '#7f8c8d';
+    el.innerHTML = html;
+}
 
-        const form = document.getElementById('reverseSimulationForm');
-        const formData = new FormData(form);
-        const requiredFields = ['shell_height', 'current', 'sensor_range', 'volume'];
-        for (let field of requiredFields) {
-            if (!formData.get(field)) {
-                alert('请填写所有必填参数');
-                return;
-            }
-        }
-
-        const resultsDiv = document.getElementById('reverseResults');
-        const placeholderDiv = document.getElementById('reverseResultsPlaceholder');
-        placeholderDiv.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: #667eea;"></i><p style="margin-top: 0.5rem;">正在运行逆向预测...</p>';
-        placeholderDiv.style.display = 'block';
-        resultsDiv.style.display = 'none';
-
-        // Mock prediction (placeholder until backend reverse model is ready)
-        setTimeout(() => {
-            const peakPressure = Math.max(...data.pressure);
-            const avgPressure = data.pressure.reduce((a, b) => a + b, 0) / data.pressure.length;
-
-            document.getElementById('predicted_nc_type').value = ['D', 'E', 'F'][Math.floor(Math.random() * 3)];
-            document.getElementById('predicted_nc_amount').value = (peakPressure / 1.2).toFixed(1);
-            document.getElementById('predicted_gp_type').value = ['A', 'B', 'C'][Math.floor(Math.random() * 3)];
-            document.getElementById('predicted_gp_amount').value = (avgPressure * 0.8).toFixed(1);
-            document.getElementById('confidence_score').textContent = (92 + Math.random() * 6).toFixed(1) + '%';
-
-            // 点火具: copy user selection if provided, otherwise suggest a value
-            const igniterVal = formData.get('igniter');
-            document.getElementById('predicted_igniter').value = igniterVal || '115';
-
-            // Reset work order display when new prediction runs
-            document.getElementById('reverseWorkOrderDisplay').style.display = 'none';
-
-            resultsDiv.style.display = 'block';
-            placeholderDiv.style.display = 'none';
-        }, 1500);
+// ── Tab 1: Reverse simulation (mock) ─────────────────────────────────────────
+function runReverseSimulation() {
+    if (!uploadedPtCurve) { alert('请先上传PT曲线文件'); return; }
+    const form = document.getElementById('reverseSimulationForm');
+    const fd = new FormData(form);
+    for (const f of ['shell_height', 'current', 'sensor_range', 'volume']) {
+        if (!fd.get(f)) { alert('请填写所有必填参数'); return; }
     }
+    const ph = document.getElementById('reverseResultsPlaceholder');
+    ph.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:2rem; color:#667eea;"></i>' +
+                   '<p style="margin-top:0.5rem;">正在运行逆向预测...</p>';
+    ph.style.display = 'block';
+    document.getElementById('reverseResults').style.display = 'none';
 
-    // ── Work order generation ─────────────────────────────────────────────────
+    setTimeout(() => {
+        const data = uploadedPtCurve;
+        const peakP = Math.max(...data.pressure);
+        const avgP  = data.pressure.reduce((a, b) => a + b, 0) / data.pressure.length;
+        document.getElementById('predicted_nc_type').value   = ['D','E','F'][Math.floor(Math.random()*3)];
+        document.getElementById('predicted_nc_amount').value = (peakP / 1.2).toFixed(1);
+        document.getElementById('predicted_gp_type').value   = ['A','B','C'][Math.floor(Math.random()*3)];
+        document.getElementById('predicted_gp_amount').value = (avgP * 0.8).toFixed(1);
+        document.getElementById('confidence_score').textContent =
+            (92 + Math.random() * 6).toFixed(1) + '%';
+        const ig = fd.get('igniter');
+        document.getElementById('predicted_igniter').value = ig || '115';
+        document.getElementById('reverseWorkOrderDisplay').style.display = 'none';
+        document.getElementById('reverseResults').style.display = 'block';
+        ph.style.display = 'none';
+    }, 1500);
+}
 
-    function generateReverseWorkOrder() {
-        if (document.getElementById('reverseResults').style.display === 'none') {
-            alert('请先运行仿真获取预测结果');
-            return;
-        }
-
-        // Generate WO number
-        const now = new Date();
-        const pad = (n, w = 2) => String(n).padStart(w, '0');
-        const wo = `WO${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
-                   `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}` +
-                   `${pad(Math.floor(Math.random() * 10000), 4)}`;
-
-        document.getElementById('reverseWorkOrderNumber').textContent = wo;
-
-        // Collect input parameters
-        const form = document.getElementById('reverseSimulationForm');
-        const fd = new FormData(form);
-        const device = fd.get('device') || '无';
-
-        // Collect suggestion results
-        const ncType    = document.getElementById('predicted_nc_type').value;
-        const ncAmount  = document.getElementById('predicted_nc_amount').value;
-        const gpType    = document.getElementById('predicted_gp_type').value;
-        const gpAmount  = document.getElementById('predicted_gp_amount').value;
-        const igniter   = document.getElementById('predicted_igniter').value;
-
-        document.getElementById('reverseWorkOrderParams').innerHTML =
-            `<b>输入参数</b><br>` +
-            `管壳高度: ${fd.get('shell_height')} mm &nbsp;|&nbsp; 通电条件: ${fd.get('current')} A<br>` +
-            `传感器量程: ${fd.get('sensor_range')} MPa &nbsp;|&nbsp; 容积: ${fd.get('volume')} cc &nbsp;|&nbsp; 测试设备: ${device}<br>` +
-            `<br><b>预测配方</b><br>` +
-            `NC: ${ncType} / ${ncAmount} mg &nbsp;|&nbsp; GP: ${gpType} / ${gpAmount} mg<br>` +
-            `点火具: ${igniter}`;
-
-        document.getElementById('reverseWorkOrderDisplay').style.display = 'block';
+function generateReverseWorkOrder() {
+    if (document.getElementById('reverseResults').style.display === 'none') {
+        alert('请先运行仿真获取预测结果'); return;
     }
+    const now = new Date();
+    const pad = (n, w=2) => String(n).padStart(w, '0');
+    const wo = `WO${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}` +
+               `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}` +
+               `${pad(Math.floor(Math.random()*10000), 4)}`;
+    document.getElementById('reverseWorkOrderNumber').textContent = wo;
+    const form = document.getElementById('reverseSimulationForm');
+    const fd = new FormData(form);
+    document.getElementById('reverseWorkOrderParams').innerHTML =
+        `<b>输入参数</b><br>` +
+        `管壳高度: ${fd.get('shell_height')} mm &nbsp;|&nbsp; 通电条件: ${fd.get('current')} A<br>` +
+        `传感器量程: ${fd.get('sensor_range')} MPa &nbsp;|&nbsp; 容积: ${fd.get('volume')}<br>` +
+        `<br><b>预测配方</b><br>` +
+        `NC: ${document.getElementById('predicted_nc_type').value} / ` +
+             `${document.getElementById('predicted_nc_amount').value} mg &nbsp;|&nbsp; ` +
+        `GP: ${document.getElementById('predicted_gp_type').value} / ` +
+             `${document.getElementById('predicted_gp_amount').value} mg<br>` +
+        `点火具: ${document.getElementById('predicted_igniter').value}`;
+    document.getElementById('reverseWorkOrderDisplay').style.display = 'block';
+}
 
-    // Initialise empty chart on load
-    window.addEventListener('load', updateReversePlot);
-
-    // ── Block 1: Work order recipe lookup ────────────────────────────────────
-
-    /**
-     * Fetch the recipe for a work order and pre-fill the input form.
-     * Maps DB field names → form <select name="..."> values.
-     */
-    async function lookupWorkOrderRecipe() {
-        const wo = document.getElementById('reverseWoInput').value.trim();
-        const statusEl = document.getElementById('reverseWoStatus');
-        if (!wo) {
-            _setWoStatus('请输入工单号', 'error');
-            return;
-        }
-        _setWoStatus('<i class="fas fa-spinner fa-spin"></i> 查询中...', 'info');
-        try {
-            const resp = await fetch(`/work_order/${encodeURIComponent(wo)}/recipe`, {
-                headers: { 'X-CSRFToken': getCsrfToken() }
-            });
-            const data = await resp.json();
-            if (!data.success || !data.found) {
-                _setWoStatus('工单不存在', 'error');
-                return;
-            }
-            // Map DB fields → form select names (输入参数 column)
-            _setSelectValue('shell_height', data.shell_model);
-            _setSelectValue('current',      data.current);
-            _setSelectValue('sensor_range', data.sensor_model);
-            _setSelectValue('volume',       data.body_model);
-            _setSelectValue('igniter',      data.ignition_model);
-            _setSelectValue('device',       data.equipment);
-
-            // Populate 逆向预测结果 panel with the actual recipe from the work order
-            const _val = (v, unit) => (v != null && v !== '') ? String(v) + (unit || '') : '—';
-            document.getElementById('predicted_nc_type').value   = _val(data.nc_type_1);
-            document.getElementById('predicted_nc_amount').value = _val(data.nc_usage_1);
-            document.getElementById('predicted_gp_type').value   = _val(data.gp_type);
-            document.getElementById('predicted_gp_amount').value = _val(data.gp_usage);
-            document.getElementById('predicted_igniter').value   = _val(data.ignition_model);
-            document.getElementById('confidence_score').textContent = '实际工单配方';
-
-            // Show results panel, hide placeholder
-            document.getElementById('reverseWorkOrderDisplay').style.display = 'none';
-            document.getElementById('reverseResults').style.display           = 'block';
-            document.getElementById('reverseResultsPlaceholder').style.display = 'none';
-
-            _setWoStatus(`✓ 已填充工单 ${wo} 的参数`, 'ok');
-        } catch (e) {
-            console.error('lookupWorkOrderRecipe error:', e);
-            _setWoStatus('网络错误，请重试', 'error');
-        }
-    }
-
-    /**
-     * Set a <select> by name to the given value.
-     * If the value is not already in the dropdown, a new option is appended
-     * dynamically so the stored DB value is always reflected.
-     */
-    function _setSelectValue(name, value) {
-        if (value == null) return;
-        const sel = document.querySelector(`[name="${name}"]`);
-        if (!sel) return;
-        const target = String(value);
-        for (const opt of sel.options) {
-            if (opt.value === target) { sel.value = target; return; }
-        }
-        // Value not in dropdown options — add it so it shows correctly
-        const opt = document.createElement('option');
-        opt.value = target;
-        opt.textContent = target;
-        sel.appendChild(opt);
-        sel.value = target;
-    }
-
-    function _setWoStatus(html, type) {
-        const el = document.getElementById('reverseWoStatus');
-        const colors = { ok: '#27ae60', error: '#e74c3c', info: '#667eea' };
-        el.style.color = colors[type] || '#7f8c8d';
-        el.innerHTML = html;
-    }
-
-    // ── Block 2: Upload PT curve file and trigger reverse prediction ─────────
-
-    /**
-     * Upload the selected file to /simulation/load_test_data, populate the
-     * pressure table with the parsed time/pressure arrays, then automatically
-     * run the reverse simulation.
-     */
-    async function uploadAndPredict() {
-        const fileInput = document.getElementById('reverseFileInput');
-        const statusEl  = document.getElementById('reverseFileStatus');
-        if (!fileInput.files.length) {
-            _setFileStatus('请先选择文件', 'error');
-            return;
-        }
-        _setFileStatus('<i class="fas fa-spinner fa-spin"></i> 解析文件中...', 'info');
-
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        try {
-            const resp = await fetch('/simulation/load_test_data', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': getCsrfToken() },
-                body: formData
-            });
-            const data = await resp.json();
-            if (!data.success || !data.time || !data.pressure) {
-                _setFileStatus('文件解析失败：' + (data.message || '格式不支持'), 'error');
-                return;
-            }
-            populatePressureTable(data.time, data.pressure);
-            updateReversePlot();
-            _setFileStatus(`✓ 已导入 ${data.time.length} 个数据点，正在预测...`, 'ok');
-            runReverseSimulation();
-        } catch (e) {
-            console.error('uploadAndPredict error:', e);
-            _setFileStatus('网络错误，请重试', 'error');
-        }
-    }
-
-    /**
-     * Replace the pressure table body with rows built from the given arrays.
-     * Re-attaches live-update listeners to all new inputs.
-     */
-    function populatePressureTable(times, pressures) {
-        const tbody = document.querySelector('#pressureTable tbody');
-        tbody.innerHTML = times.map((t, i) =>
-            `<tr>
-                <td style="padding:0.2rem 0.4rem; border:1px solid #ddd;">
-                    <input type="number" step="any" class="time-input form-control"
-                           value="${t}"
-                           style="padding:0.25rem 0.4rem; font-size:0.85rem; text-align:center;">
-                </td>
-                <td style="padding:0.2rem 0.4rem; border:1px solid #ddd;">
-                    <input type="number" step="any" class="pressure-input form-control"
-                           value="${pressures[i] ?? ''}"
-                           style="padding:0.25rem 0.4rem; font-size:0.85rem;">
-                </td>
-            </tr>`
-        ).join('');
-        // Re-attach live-plot listeners to the new inputs
-        tbody.querySelectorAll('.time-input, .pressure-input').forEach(inp => {
-            inp.addEventListener('input', updateReversePlot);
-        });
-    }
-
-    function _setFileStatus(html, type) {
-        const el = document.getElementById('reverseFileStatus');
-        const colors = { ok: '#27ae60', error: '#e74c3c', info: '#667eea' };
-        el.style.color = colors[type] || '#7f8c8d';
-        el.innerHTML = html;
-    }
+window.addEventListener('load', _initPtChart);
 </script>
 {% endblock %}

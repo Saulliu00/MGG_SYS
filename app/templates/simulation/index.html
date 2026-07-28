@@ -203,7 +203,17 @@
             <!-- Simulation Tab -->
             <div id="simulation" class="tab-content active">
                 <div class="chart-container">
-                    <div class="chart-header">计算结果</div>
+                    <div class="chart-header" style="display:flex; align-items:center; justify-content:space-between;">
+                        <span>计算结果</span>
+                        <button id="downloadXlsxBtn" type="button" onclick="downloadSimulationXlsx()"
+                                disabled
+                                style="background:#27ae60; color:white; border:none;
+                                       padding:0.35rem 0.9rem; border-radius:7px; cursor:pointer;
+                                       font-size:0.82rem; font-weight:600; opacity:0.4;
+                                       display:flex; align-items:center; gap:0.35rem; transition:opacity .2s;">
+                            <i class="fas fa-file-excel"></i> 下载 Excel
+                        </button>
+                    </div>
                     <div class="chart-info">
                         多项式拟合 (Degree=3, 中标R²=1.0000)<br>
                         拟真值: 775.0

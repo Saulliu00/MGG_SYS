@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}工单对比 - MGG仿真系统{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <div class="simulation-container" style="grid-template-columns: 1fr 3fr 1fr;">
+
+        <!-- Left Panel: Dimension + Value Selection -->
+        <div class="panel parameters-panel" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="panel-title">对比参数</div>
+
+            <!-- Dimension selector -->
+            <div style="padding:0 0.5rem 0.75rem;">
+                <label style="font-size:0.82rem; color:#7f8c8d; display:block; margin-bottom:0.3rem;">对比维度</label>
+                <select id="dimSelect" onchange="onDimChange()"
+                        style="width:100%; padding:0.45rem 0.6rem; border:1px solid #dce1e7;
+                               border-radius:8px; font-size:0.9rem; outline:none; background:#fff;">
+                    <option value="work_order">工单号</option>
+                    <option value="ignition_model">点火具型号</option>
+                    <option value="nc_usage_1">NC用量1 (mg)</option>
+                    <option value="gp_usage">GP用量 (mg)</option>
+                    <option value="shell_model">管壳高度 (mm)</option>
+                </select>
+            </div>
+
+            <!-- Available values list -->
+            <div style="padding:0 0.5rem 0.5rem;">
+                <label style="font-size:0.82rem; color:#7f8c8d; display:block; margin-bottom:0.3rem;">
+                    可选项 <span id="selCount" style="color:#667eea; font-weight:600;"></span>
+                </label>
+            </div>
+            <div id="optionsList" style="flex:1; overflow-y:auto; padding:0 0.5rem;">
+                <div style="color:#7f8c8d; text-align:center; padding:2rem; font-size:0.88rem;">
+                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                </div>
+            </div>
+
+            <!-- Run button -->
+            <div style="padding:0.75rem 0.5rem 0.25rem;">
+                <button id="runCompareBtn" type="button" onclick="runComparison()"
+                        disabled
+                        style="width:100%; background:#667eea; color:white; border:none;
+                               padding:0.6rem; border-radius:8px; cursor:pointer;
+                               font-size:0.92rem; font-weight:700; opacity:0.5; transition:opacity .2s;">
+                    <i class="fas fa-chart-line"></i> 运行对比
+                </button>
+                <div id="selHint" style="font-size:0.76rem; color:#aab2bd; text-align:center; margin-top:0.4rem;">
+                    请选择至少 2 项
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Panel: Comparison Chart -->
+        <div class="panel test-info-panel" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="panel-title" id="chartTitle">PT 曲线对比</div>
+            <div class="chart-container" style="flex:1; display:flex; flex-direction:column;">
+                <div class="chart-header" id="chartSubtitle"
+                     style="font-size:0.82rem; color:#7f8c8d; min-height:1.2em;"></div>
+                <div id="compareChartDiv" style="flex:1; min-height:0;"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Statistics Table -->
+        <div class="panel results-panel" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="panel-title">对比统计</div>
+            <div id="statsPanel" style="flex:1; overflow-y:auto; padding:0.5rem;">
+                <div style="color:#7f8c8d; text-align:center; padding:3rem; font-size:0.9rem;">
+                    <i class="fas fa-chart-bar"
+                       style="font-size:2rem; display:block; margin-bottom:0.75rem; opacity:0.4;"></i>
+                    运行对比后查看统计
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/compare.js') }}"></script>
+{% endblock %}

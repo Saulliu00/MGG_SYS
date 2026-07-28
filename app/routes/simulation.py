@@ -1,7 +1,8 @@
 import json
 import os
+from io import BytesIO
 
-from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, current_app, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db
@@ -425,3 +426,100 @@ def generate_comparison_chart():
             'success': False,
             'message': '服务器内部错误，请稍后重试'
         }), 500
+
+
+@bp.route('/search_similar', methods=['POST'])
+@login_required
+@research_required
+def search_similar():
+    """
+    Find the top-N work orders whose averaged PT curves are most similar to
+    the user-supplied PT curve, after pre-filtering by input parameters.
+    """
+    try:
+        body = request.get_json()
+        query_time = body.get('time', [])
+        query_pressure = body.get('pressure', [])
+        filters = body.get('filters', {})
+        top_n = min(int(body.get('top_n', 5)), 20)
+
+        if not query_time or not query_pressure:
+            return jsonify({'success': False, 'message': '未提供PT曲线数据'}), 400
+
+        result = current_app.work_order_service.search_similar_work_orders(
+            query_time, query_pressure, filters, top_n
+        )
+        return jsonify({'success': True, **result})
+
+    except Exception as e:
+        current_app.logger.error('search_similar error: %s', e, exc_info=True)
+        return jsonify({'success': False, 'message': '服务器内部错误，请稍后重试'}), 500
+
+
+@bp.route('/export_xlsx', methods=['POST'])
+@login_required
+@research_required
+def export_xlsx():
+    """Export simulation P-T curve data as .xlsx file."""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+
+        data = request.get_json()
+        time_vals = data.get('time', [])
+        pressure_vals = data.get('pressure', [])
+        statistics = data.get('statistics', {})
+        nc_usage_1 = statistics.get('nc_usage_1', '')
+
+        wb = Workbook()
+
+        # Sheet 1: raw curve data
+        ws1 = wb.active
+        ws1.title = 'PT曲线数据'
+        header_font = Font(bold=True, color='FFFFFF')
+        header_fill = PatternFill(fill_type='solid', fgColor='667EEA')
+        for col, hdr in enumerate(['时间 (ms)', '压力 (MPa)'], start=1):
+            cell = ws1.cell(row=1, column=col, value=hdr)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        ws1.column_dimensions['A'].width = 16
+        ws1.column_dimensions['B'].width = 16
+        for t, p in zip(time_vals, pressure_vals):
+            ws1.append([round(float(t), 6), round(float(p), 6)])
+
+        # Sheet 2: statistics
+        ws2 = wb.create_sheet('统计信息')
+        stat_labels = {
+            'nc_usage_1': 'NC用量1 (mg)',
+            'peak_pressure': '峰值压力 (MPa)',
+            'num_points': '数据点数',
+            'num_models': '模型数量',
+            'r_squared': 'R²',
+        }
+        for col, hdr in enumerate(['指标', '数值'], start=1):
+            cell = ws2.cell(row=1, column=col, value=hdr)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        ws2.column_dimensions['A'].width = 20
+        ws2.column_dimensions['B'].width = 16
+        for key, label in stat_labels.items():
+            if key in statistics:
+                ws2.append([label, statistics[key]])
+
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        filename = f'PT曲线_NC1_{nc_usage_1}mg.xlsx' if nc_usage_1 else 'PT曲线数据.xlsx'
+        return send_file(
+            buf,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        current_app.logger.error('XLSX export error: %s', e, exc_info=True)
+        return jsonify({'success': False, 'message': '导出失败，请稍后重试'}), 500

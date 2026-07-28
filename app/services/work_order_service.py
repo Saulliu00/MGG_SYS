@@ -249,6 +249,278 @@ class WorkOrderService:
         self.db.session.commit()
         return {'success': True}
 
+    # ── Similarity Search (逆向搜索) ─────────────────────────────────────────
+
+    # Maps frontend filter key → Simulation column name
+    _FILTER_FIELD = {
+        'shell_model':    'shell_model',
+        'current':        'current',
+        'sensor_model':   'sensor_model',
+        'body_model':     'body_model',
+        'ignition_model': 'ignition_model',
+    }
+
+    def search_similar_work_orders(
+        self,
+        query_time: List[float],
+        query_pressure: List[float],
+        filters: Dict,
+        top_n: int = 5,
+    ) -> Dict:
+        """
+        Find the top-N work orders whose averaged PT curves are most similar
+        to the query curve, after optionally filtering by recipe parameters.
+
+        Returns:
+            {'results': [{work_order, score, score_pct, recipe_summary,
+                          max_pressure, max_pressure_time, ...}, ...]}
+        """
+        from app.utils.similarity import rank_candidates
+
+        # Build base query — only work orders with a non-empty work_order field
+        query = Simulation.query.filter(
+            Simulation.work_order.isnot(None),
+            Simulation.work_order != '',
+        )
+        for fk, field_name in self._FILTER_FIELD.items():
+            val = filters.get(fk)
+            if val not in (None, '', 'None'):
+                query = query.filter(getattr(Simulation, field_name) == str(val))
+        sims = query.all()
+
+        if not sims:
+            return {'results': []}
+
+        # Group test datasets by work_order
+        sim_id_to_wo = {s.id: s.work_order for s in sims}
+        wo_to_sim = {}
+        for s in sims:
+            wo_to_sim.setdefault(s.work_order, s)   # earliest sim per WO
+
+        all_sim_ids = list(sim_id_to_wo.keys())
+        test_results = TestResult.query.filter(
+            TestResult.simulation_id.in_(all_sim_ids)
+        ).all()
+
+        wo_datasets: Dict[str, List[Dict]] = {}
+        for tr in test_results:
+            wo = sim_id_to_wo.get(tr.simulation_id)
+            if not wo or not tr.data:
+                continue
+            try:
+                d = json.loads(tr.data)
+                if d.get('time') and d.get('pressure'):
+                    wo_datasets.setdefault(wo, []).append(d)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Build averaged candidates
+        candidates = []
+        for wo, datasets in wo_datasets.items():
+            if not datasets:
+                continue
+            avg = ComparisonService.average_datasets(datasets)
+            candidates.append((wo, avg['time'], avg['pressure']))
+
+        if not candidates:
+            return {'results': []}
+
+        ranked = rank_candidates(query_time, query_pressure, candidates)
+
+        results = []
+        for item in ranked[:top_n]:
+            wo = item['label']
+            sim = wo_to_sim.get(wo)
+            feat = item['features']
+            results.append({
+                'work_order':       wo,
+                'score':            round(item['score'], 4),
+                'score_pct':        round(item['score'] * 100, 1),
+                'recipe_summary':   self._recipe_summary(sim) if sim else '',
+                'max_pressure':     round(feat['max_pressure'], 3),
+                'max_pressure_time': round(feat['max_pressure_time'], 3),
+                'rising_slope':     round(feat['rising_slope'], 3),
+                'falling_slope':    round(feat['falling_slope'], 3),
+            })
+        return {'results': results}
+
+    def get_work_order_averaged_curve(self, work_order: str) -> Dict:
+        """
+        Return the averaged time/pressure arrays for all test results linked
+        to the given work order.
+
+        Returns:
+            {'found': True, 'time': [...], 'pressure': [...]}
+            {'found': False} if no test data exists.
+        """
+        sims = Simulation.query.filter_by(work_order=work_order).all()
+        if not sims:
+            return {'found': False}
+
+        sim_ids = [s.id for s in sims]
+        test_results = TestResult.query.filter(
+            TestResult.simulation_id.in_(sim_ids)
+        ).all()
+
+        datasets = []
+        for tr in test_results:
+            if not tr.data:
+                continue
+            try:
+                d = json.loads(tr.data)
+                if d.get('time') and d.get('pressure'):
+                    datasets.append(d)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        if not datasets:
+            return {'found': False}
+
+        avg = ComparisonService.average_datasets(datasets)
+        return {'found': True, 'time': avg['time'], 'pressure': avg['pressure']}
+
+    # ── Comparison (工单对比) ──────────────────────────────────────────────────
+
+    # Mapping from dimension key to Simulation column attribute name
+    _DIM_FIELD = {
+        'work_order':    'work_order',
+        'nc_usage_1':    'nc_usage_1',
+        'gp_usage':      'gp_usage',
+        'shell_model':   'shell_model',
+        'ignition_model': 'ignition_model',
+    }
+
+    def get_compare_options(self, dimension: str) -> List[Dict]:
+        """
+        Return distinct non-null values for the given dimension that have at
+        least one linked TestResult with valid time/pressure data.
+
+        Returns a list of {'value': str, 'label': str, 'count': int} dicts,
+        sorted by value.
+        """
+        field_name = self._DIM_FIELD.get(dimension)
+        if not field_name:
+            return []
+
+        # All simulations that have at least one test result
+        sim_ids_with_data = {
+            tr.simulation_id
+            for tr in TestResult.query.with_entities(TestResult.simulation_id).all()
+        }
+        if not sim_ids_with_data:
+            return []
+
+        sims = Simulation.query.filter(Simulation.id.in_(sim_ids_with_data)).all()
+
+        # Group by field value → count sims (proxy for number of datasets)
+        buckets: Dict[str, int] = {}
+        for s in sims:
+            val = getattr(s, field_name)
+            if val is None or val == '':
+                continue
+            key = str(val)
+            buckets[key] = buckets.get(key, 0) + 1
+
+        dim_labels = {
+            'work_order':     '工单',
+            'nc_usage_1':     'NC用量1',
+            'gp_usage':       'GP用量',
+            'shell_model':    '管壳高度',
+            'ignition_model': '点火具',
+        }
+        prefix = dim_labels.get(dimension, dimension)
+
+        return sorted(
+            [{'value': k, 'label': f'{prefix}: {k}', 'count': v}
+             for k, v in buckets.items()],
+            key=lambda x: x['value']
+        )
+
+    def run_comparison(self, dimension: str, values: List[str]) -> Dict:
+        """
+        For each selected value, aggregate all linked TestResult datasets into
+        one averaged P-T curve, then build a multi-line comparison chart and
+        a per-value statistics table.
+
+        Returns:
+            {
+              'chart': <Plotly dict>,
+              'table': [{'label', 'count', 'peak_pressure', 'peak_time'}, ...]
+            }
+        """
+        field_name = self._DIM_FIELD.get(dimension)
+        if not field_name:
+            return {'chart': Plotter.create_multi_run_chart([], []), 'table': []}
+
+        curves: List[Dict] = []
+        labels: List[str] = []
+        table: List[Dict] = []
+
+        dim_units = {
+            'nc_usage_1': 'mg',
+            'gp_usage':   'mg',
+            'shell_model': 'mm',
+        }
+        unit = dim_units.get(dimension, '')
+
+        for raw_val in values:
+            # Query matching simulations
+            if dimension in ('nc_usage_1', 'gp_usage'):
+                try:
+                    num_val = float(raw_val)
+                except ValueError:
+                    continue
+                sims = Simulation.query.filter(
+                    getattr(Simulation, field_name) == num_val
+                ).all()
+            else:
+                sims = Simulation.query.filter(
+                    getattr(Simulation, field_name) == raw_val
+                ).all()
+
+            sim_ids = [s.id for s in sims]
+            if not sim_ids:
+                continue
+
+            test_results = TestResult.query.filter(
+                TestResult.simulation_id.in_(sim_ids)
+            ).all()
+
+            datasets = []
+            for tr in test_results:
+                if not tr.data:
+                    continue
+                try:
+                    d = json.loads(tr.data)
+                    if d.get('time') and d.get('pressure'):
+                        datasets.append(d)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            if not datasets:
+                continue
+
+            averaged = ComparisonService.average_datasets(datasets)
+            suffix = f' {unit}' if unit else ''
+            label = f'{raw_val}{suffix}' if dimension != 'work_order' else raw_val
+
+            curves.append(averaged)
+            labels.append(label)
+
+            # Per-group statistics
+            peak_p, peak_t = ComparisonService.find_peak_pressure(
+                averaged['pressure'], averaged['time']
+            )
+            table.append({
+                'label': label,
+                'count': len(datasets),
+                'peak_pressure': round(peak_p, 3),
+                'peak_time': round(peak_t, 3),
+            })
+
+        chart = Plotter.create_multi_run_chart(curves, labels)
+        return {'chart': chart, 'table': table}
+
     # ── private helpers ──────────────────────────────────────────────────────
 
     @staticmethod
